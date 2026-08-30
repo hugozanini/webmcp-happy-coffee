@@ -24,6 +24,28 @@ export interface Dataset {
   sampleData: Record<string, unknown>[];
   fields: { name: string; type: string; description: string }[];
   qualityDashboard: QualityDashboard;
+  publication?: PublishedDatasetMetadata;
+}
+
+export interface PublishedQualityCheck {
+  id: string;
+  cellId: string;
+  name: string;
+  description: string;
+  severity: QualityEntry['severity'];
+  sql: string;
+}
+
+export interface PublishedDatasetMetadata {
+  sourceCellId: string;
+  sourceSql: string;
+  transformations: string;
+  schedule: {
+    frequency: string;
+    cron: string;
+  };
+  qualityChecks: PublishedQualityCheck[];
+  expiresAt: Date;
 }
 
 export interface QualityDashboard {
@@ -145,4 +167,15 @@ export interface CatalogData {
   pipelineRuns: PipelineRun[];
   qualityChecks: QualityEntry[];
   costs: CostEntry[];
+}
+
+export interface EphemeralPublicationBundle {
+  id: string;
+  dataset: Dataset;
+  pipeline: Pipeline;
+  pipelineRuns: PipelineRun[];
+  qualityChecks: QualityEntry[];
+  lineage: LineageNode[];
+  costs: CostEntry[];
+  expiresAt: Date;
 }

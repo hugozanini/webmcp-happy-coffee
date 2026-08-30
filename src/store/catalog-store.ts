@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { CatalogData, PipelineRun, Pipeline } from '../data/types';
+import type { CatalogData, EphemeralPublicationBundle, PipelineRun, Pipeline } from '../data/types';
 import { generateCatalogData } from '../data/generators';
 import { generateRunLogs } from '../data/generators/pipeline-runs';
 
@@ -10,6 +10,9 @@ interface CatalogStore extends CatalogData {
   addPipelineRun: (run: PipelineRun) => void;
   updatePipelineRun: (runId: string, patch: Partial<PipelineRun>) => void;
   updatePipeline: (pipelineId: string, patch: Partial<Pipeline>) => void;
+  publishEphemeralBundle: (bundle: EphemeralPublicationBundle) => void;
+  removeEphemeralBundle: (bundleId: string) => void;
+  clearEphemeralBundles: () => void;
   startMockPipelineRun: (pipelineId: string, environment: string) => string;
 }
 
@@ -51,6 +54,46 @@ export const useCatalogStore = create<CatalogStore>((set, get) => ({
         p.id === pipelineId ? { ...p, ...patch } : p,
       ),
     })),
+
+  publishEphemeralBundle: (bundle) => {
+    set((state) => ({
+      datasets: [bundle.dataset, ...state.datasets],
+      pipelines: [bundle.pipeline, ...state.pipelines],
+      pipelineRuns: [...bundle.pipelineRuns, ...state.pipelineRuns],
+      qualityChecks: [...bundle.qualityChecks, ...state.qualityChecks],
+      lineage: [...bundle.lineage, ...state.lineage],
+      costs: [...bundle.costs, ...state.costs],
+    }));
+
+    const expiryDelay = Math.max(0, bundle.expiresAt.getTime() - Date.now());
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => get().removeEphemeralBundle(bundle.id), expiryDelay);
+    }
+  },
+
+  removeEphemeralBundle: (bundleId) => {
+    const marker = `ephemeral-bundle:${bundleId}`;
+    set((state) => {
+      const datasetIds = state.datasets.filter((dataset) => dataset.tags.includes(marker)).map((dataset) => dataset.id);
+      const pipelineIds = state.pipelines.filter((pipeline) => pipeline.tags.includes(marker)).map((pipeline) => pipeline.id);
+      return {
+        datasets: state.datasets.filter((dataset) => !datasetIds.includes(dataset.id)),
+        pipelines: state.pipelines.filter((pipeline) => !pipelineIds.includes(pipeline.id)),
+        pipelineRuns: state.pipelineRuns.filter((run) => !pipelineIds.includes(run.pipelineId)),
+        qualityChecks: state.qualityChecks.filter((check) => !datasetIds.includes(check.datasetId)),
+        lineage: state.lineage.filter((node) => !node.datasetIds.some((id) => datasetIds.includes(id))),
+        costs: state.costs.filter((cost) => !datasetIds.includes(cost.entityId) && !pipelineIds.includes(cost.entityId)),
+      };
+    });
+  },
+
+  clearEphemeralBundles: () => {
+    const bundleIds = get().datasets
+      .flatMap((dataset) => dataset.tags)
+      .filter((tag) => tag.startsWith('ephemeral-bundle:'))
+      .map((tag) => tag.replace('ephemeral-bundle:', ''));
+    [...new Set(bundleIds)].forEach((bundleId) => get().removeEphemeralBundle(bundleId));
+  },
 
   // Inserts a new PipelineRun with status "Running" and auto-transitions
   // it to "Success" after 8 seconds to simulate a real execution.

@@ -22,5 +22,7 @@ export function useCatalogData() {
     addPipelineRun: store.addPipelineRun,
     updatePipelineRun: store.updatePipelineRun,
     updatePipeline: store.updatePipeline,
+    publishEphemeralBundle: store.publishEphemeralBundle,
+    clearEphemeralBundles: store.clearEphemeralBundles,
   };
 }
