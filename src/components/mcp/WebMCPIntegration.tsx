@@ -44,6 +44,55 @@ export function WebMCPIntegration() {
     const registration = new AbortController();
     const tools: ToolDefinition[] = [
         {
+          name: 'open_development_workspace',
+          description:
+            'Open the Happy Coffee DuckDB development workspace and list the generated catalog tables available for SQL development. ' +
+            'Use this first when a user wants to explore, analyze, or build data in the portal.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: (args: Record<string, unknown>) =>
+            executeToolRef.current('open_development_workspace', args),
+        },
+        {
+          name: 'run_duckdb_sql',
+          readOnlyHint: false,
+          description:
+            'Run SQL with DuckDB in the user\'s browser-local Happy Coffee development workspace. ' +
+            'Use happy_coffee.<table_name> for generated catalog data and workspace.<table_name> for temporary tables. ' +
+            'Results appear in the workspace UI. DDL and DML are local to the browser and expire after 90 minutes.',
+          inputSchema: {
+            type: 'object',
+            properties: { sql: { type: 'string', description: 'A complete DuckDB SQL statement.' } },
+            required: ['sql'],
+          },
+          execute: (args: Record<string, unknown>) =>
+            executeToolRef.current('run_duckdb_sql', args),
+        },
+        {
+          name: 'create_workspace_table',
+          readOnlyHint: false,
+          description:
+            'Create or replace a named temporary table in the browser-local workspace schema from a SELECT or WITH query. ' +
+            'Use this to develop derived data the user can inspect in the Happy Coffee workspace. Temporary tables expire after 90 minutes.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Simple table name using letters, numbers, and underscores.' },
+              selectSql: { type: 'string', description: 'SELECT or WITH query defining the table.' },
+            },
+            required: ['name', 'selectSql'],
+          },
+          execute: (args: Record<string, unknown>) =>
+            executeToolRef.current('create_workspace_table', args),
+        },
+        {
+          name: 'inspect_development_tables',
+          description:
+            'List the generated Happy Coffee catalog tables and temporary workspace tables available in the DuckDB development workspace.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: (args: Record<string, unknown>) =>
+            executeToolRef.current('inspect_development_tables', args),
+        },
+        {
           name: 'view_home_dashboard',
           description:
             'Navigate to the home dashboard and view top assets. Optionally filter by asset type.',

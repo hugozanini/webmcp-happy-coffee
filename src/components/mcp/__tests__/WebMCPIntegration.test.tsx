@@ -57,19 +57,23 @@ describe('WebMCPIntegration', () => {
         consoleSpy.mockRestore();
     });
 
-    it('registers 9 tools when mounted', () => {
+  it('registers 13 tools when mounted', () => {
         render(
             <MemoryRouter>
                 <WebMCPIntegration />
             </MemoryRouter>
         );
 
-        expect(modelContextMock.registerTool).toHaveBeenCalledTimes(9);
+        expect(modelContextMock.registerTool).toHaveBeenCalledTimes(13);
         expect(modelContextMock.registerTool.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
         const triggerTool = modelContextMock.registerTool.mock.calls
             .map(([tool]: [any]) => tool)
             .find((tool: any) => tool.name === 'trigger_pipeline_execution');
         expect(triggerTool.annotations.readOnlyHint).toBe(false);
+        const queryTool = modelContextMock.registerTool.mock.calls
+            .map(([tool]: [any]) => tool)
+            .find((tool: any) => tool.name === 'run_duckdb_sql');
+        expect(queryTool.annotations.readOnlyHint).toBe(false);
     });
 
     describe('Tool Execution', () => {

@@ -9,6 +9,7 @@ import {
   TrendingDown,
   PanelLeftClose,
   PanelLeftOpen,
+  Code2,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useCatalogData } from '../../hooks/useCatalogData';
@@ -19,6 +20,7 @@ const navItems = [
   { path: '/datasets', label: 'Datasets', icon: Database, countKey: 'datasets' as const },
   { path: '/pipelines', label: 'Pipelines', icon: Play, countKey: 'pipelines' as const },
   { path: '/costs', label: 'Costs', icon: DollarSign },
+  { path: '/develop', label: 'Develop', icon: Code2 },
 ];
 
 export function Sidebar() {

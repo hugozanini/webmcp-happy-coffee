@@ -23,6 +23,70 @@ export function useCatalogTools() {
   ): Promise<ToolResult> => {
     switch (name) {
       // ----------------------------------------------------------------
+      case 'open_development_workspace': {
+        navigate('/develop');
+        try {
+          const { duckdbWorkspace } = await import('../../lib/duckdb-workspace');
+          const tables = await duckdbWorkspace.listTables(datasets);
+          return text(
+            `Opened the Happy Coffee development workspace. DuckDB is ready with ${tables.length} browser-local tables.\n` +
+            `Catalog tables are in happy_coffee; temporary agent-created tables are in workspace and expire after 90 minutes.\n\n` +
+            `Available tables:\n${tables.map((table) => `- ${table.schema}.${table.name}`).join('\n')}`,
+          );
+        } catch (error) {
+          return text(`Opened the development workspace, but DuckDB could not start: ${error instanceof Error ? error.message : 'unknown error'}`);
+        }
+      }
+
+      // ----------------------------------------------------------------
+      case 'run_duckdb_sql': {
+        const sql = args['sql'] as string;
+        navigate('/develop');
+        try {
+          const { duckdbWorkspace } = await import('../../lib/duckdb-workspace');
+          const result = await duckdbWorkspace.run(sql, datasets);
+          return text(
+            `Ran SQL in the Happy Coffee browser workspace.\n` +
+            `Rows: ${result.rowCount}; elapsed: ${result.elapsedMs} ms${result.truncated ? '; first 250 rows returned' : ''}.\n\n` +
+            `${JSON.stringify(result.rows, null, 2)}`,
+          );
+        } catch (error) {
+          return text(`SQL execution failed: ${error instanceof Error ? error.message : 'unknown error'}`);
+        }
+      }
+
+      // ----------------------------------------------------------------
+      case 'create_workspace_table': {
+        const { name, selectSql } = args as { name: string; selectSql: string };
+        navigate('/develop');
+        try {
+          const { duckdbWorkspace } = await import('../../lib/duckdb-workspace');
+          const table = await duckdbWorkspace.createTable(name, selectSql, datasets);
+          const tables = await duckdbWorkspace.listTables(datasets);
+          return text(
+            `Created temporary table ${table}. It is visible in the development workspace and will be deleted when the 90-minute browser session expires.\n\n` +
+            `Workspace tables:\n${tables.filter((item) => item.schema === 'workspace').map((item) => `- workspace.${item.name}`).join('\n') || '- none'}`,
+          );
+        } catch (error) {
+          return text(`Could not create the workspace table: ${error instanceof Error ? error.message : 'unknown error'}`);
+        }
+      }
+
+      // ----------------------------------------------------------------
+      case 'inspect_development_tables': {
+        navigate('/develop');
+        try {
+          const { duckdbWorkspace } = await import('../../lib/duckdb-workspace');
+          const tables = await duckdbWorkspace.listTables(datasets);
+          return text(
+            `Development workspace tables:\n${tables.map((table) => `- ${table.schema}.${table.name} (${table.type})`).join('\n')}`,
+          );
+        } catch (error) {
+          return text(`Could not inspect the development workspace: ${error instanceof Error ? error.message : 'unknown error'}`);
+        }
+      }
+
+      // ----------------------------------------------------------------
       case 'view_home_dashboard': {
         const tab = (args['tab'] as string | undefined) ?? 'all';
         navigate(`/?tab=${tab}`);

@@ -13,6 +13,7 @@
     "test:run": "vitest run"
   },
   "dependencies": {
+    "@duckdb/duckdb-wasm": "^1.32.0",
     "@faker-js/faker": "^9.2.0",
     "@types/dagre": "^0.7.54",
     "@xyflow/react": "^12.10.1",
