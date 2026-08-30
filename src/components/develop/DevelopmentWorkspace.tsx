@@ -9,8 +9,11 @@ import {
 } from 'lucide-react';
 import { useCatalogData } from '../../hooks/useCatalogData';
 import { duckdbWorkspace, WORKSPACE_CHANGED_EVENT, type QueryResult, type WorkspaceTable } from '../../lib/duckdb-workspace';
-import { DEVELOPMENT_NOTEBOOK_EVENT } from '../../lib/development-events';
+import {
+  registerDevelopmentActionHandler, type DevelopmentBridgeAction, type DevelopmentBridgeResult,
+} from '../../lib/development-bridge';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { useLiveState } from '../../hooks/useLiveState';
 import { useNavigate } from 'react-router-dom';
 import type { Dataset, EphemeralPublicationBundle, Pipeline, PipelineRun, QualityEntry } from '../../data/types';
 import clsx from 'clsx';
@@ -164,23 +167,25 @@ function QualityExecutionCard({ execution, severity }: { execution: QualityExecu
 export function DevelopmentWorkspace() {
   const { datasets, publishEphemeralBundle, clearEphemeralBundles } = useCatalogData();
   const navigate = useNavigate();
-  const [notebooks, setNotebooks] = useState<Notebook[]>(() => [makeNotebook('Inventory analysis', EXAMPLE_SQL)]);
-  const [activeNotebookId, setActiveNotebookId] = useState(() => notebooks[0].id);
-  const [activeCellId, setActiveCellId] = useState(() => notebooks[0].cells[0].id);
-  const [tables, setTables] = useState<WorkspaceTable[]>([]);
+  // State the WebMCP bridge reads is held in useLiveState so that chained agent
+  // actions observe each other without waiting for a re-render.
+  const [notebooks, setNotebooks, notebooksRef] = useLiveState<Notebook[]>(() => [makeNotebook('Inventory analysis', EXAMPLE_SQL)]);
+  const [activeNotebookId, setActiveNotebookId, activeNotebookIdRef] = useLiveState(() => notebooks[0].id);
+  const [activeCellId, setActiveCellId, activeCellIdRef] = useLiveState(() => notebooks[0].cells[0].id);
+  const [tables, setTables, tablesRef] = useLiveState<WorkspaceTable[]>([]);
   const [explorerQuery, setExplorerQuery] = useState('');
   const [explorerCollapsed, setExplorerCollapsed] = useState(false);
   const [catalogExpanded, setCatalogExpanded] = useState(true);
   const [workspaceExpanded, setWorkspaceExpanded] = useState(true);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [status, setStatus, statusRef] = useLiveState<'loading' | 'ready' | 'error'>('loading');
   const [statusMessage, setStatusMessage] = useState('Preparing your local DuckDB session…');
-  const [expiresAt, setExpiresAt] = useState<Date | null>(null);
+  const [expiresAt, setExpiresAt, expiresAtRef] = useLiveState<Date | null>(null);
   const [resultSearch, setResultSearch] = useState('');
-  const [bottomTab, setBottomTab] = useState<BottomTab>('results');
+  const [bottomTab, setBottomTab, bottomTabRef] = useLiveState<BottomTab>('results');
   const [publishing, setPublishing] = useState(false);
   const [publicationError, setPublicationError] = useState('');
-  const [publishedDatasetId, setPublishedDatasetId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<PublishingDraft>(() => ({
+  const [publishedDatasetId, setPublishedDatasetId, publishedDatasetIdRef] = useLiveState<string | null>(null);
+  const [draft, setDraft, draftRef] = useLiveState<PublishingDraft>(() => ({
     sourceCellId: '', name: 'inventory_summary', displayName: 'Inventory Summary',
     description: 'A curated inventory summary developed in the Happy Coffee workspace.', owner: 'Analytics',
     tags: 'workspace, curated', criticality: 'Medium', frequency: 'Daily', cron: '0 6 * * *',
@@ -191,9 +196,9 @@ export function DevelopmentWorkspace() {
   const activeNotebook = notebooks.find((notebook) => notebook.id === activeNotebookId) ?? notebooks[0];
   const activeCell = activeNotebook.cells.find((cell) => cell.id === activeCellId) ?? activeNotebook.cells[0];
 
-  const updateNotebook = (id: string, update: (notebook: Notebook) => Notebook) => {
+  const updateNotebook = useCallback((id: string, update: (notebook: Notebook) => Notebook) => {
     setNotebooks((current) => current.map((notebook) => notebook.id === id ? update(notebook) : notebook));
-  };
+  }, [setNotebooks]);
 
   const refreshTables = useCallback(async () => {
     if (!datasets.length) return;
@@ -233,12 +238,14 @@ export function DevelopmentWorkspace() {
     return () => window.removeEventListener(WORKSPACE_CHANGED_EVENT, handleWorkspaceChange);
   }, [refreshTables]);
 
-  const updateCell = (id: string, patch: Partial<Cell>) => {
-    updateNotebook(activeNotebookId, (notebook) => ({
+  const updateCellInNotebook = useCallback((notebookId: string, id: string, patch: Partial<Cell>) => {
+    updateNotebook(notebookId, (notebook) => ({
       ...notebook,
       cells: notebook.cells.map((cell) => cell.id === id ? { ...cell, ...patch } : cell),
     }));
-  };
+  }, [updateNotebook]);
+
+  const updateCell = (id: string, patch: Partial<Cell>) => updateCellInNotebook(activeNotebookId, id, patch);
 
   const setCellKind = (id: string, kind: Cell['kind']) => {
     updateCell(id, {
@@ -270,34 +277,6 @@ export function DevelopmentWorkspace() {
     });
   };
 
-  useEffect(() => {
-    const handleNotebookEvent = (event: Event) => {
-      const detail = (event as CustomEvent<{
-        type: 'add-cell' | 'open-publishing';
-        id?: string;
-        sql?: string;
-        kind?: Cell['kind'];
-        quality?: QualityConfig;
-        result?: QueryResult;
-      }>).detail;
-      if (!detail) return;
-      if (detail.type === 'open-publishing') {
-        setBottomTab('publishing');
-        return;
-      }
-      if (detail.type !== 'add-cell' || !detail.sql) return;
-      const cell = makeCell(detail.sql, detail.kind ?? 'query', detail.id);
-      cell.quality = detail.kind === 'quality' ? detail.quality ?? cell.quality : undefined;
-      cell.result = detail.result;
-      setNotebooks((current) => current.map((notebook) => notebook.id === activeNotebookId
-        ? { ...notebook, cells: [...notebook.cells, cell] }
-        : notebook));
-      setActiveCellId(cell.id);
-    };
-    window.addEventListener(DEVELOPMENT_NOTEBOOK_EVENT, handleNotebookEvent);
-    return () => window.removeEventListener(DEVELOPMENT_NOTEBOOK_EVENT, handleNotebookEvent);
-  }, [activeNotebookId]);
-
   const addNotebook = () => {
     const notebook = makeNotebook(`Untitled query ${notebooks.length + 1}`);
     setNotebooks((current) => [...current, notebook]);
@@ -315,11 +294,13 @@ export function DevelopmentWorkspace() {
     }
   };
 
-  const runCell = async (id: string) => {
-    const cell = activeNotebook.cells.find((item) => item.id === id);
-    if (!cell || status !== 'ready') return;
+  const executeCell = useCallback(async (notebookId: string, id: string): Promise<{ result?: QueryResult; error?: string }> => {
+    const notebook = notebooksRef.current.find((item) => item.id === notebookId);
+    const cell = notebook?.cells.find((item) => item.id === id);
+    if (!cell) return { error: 'Cell not found.' };
+    if (statusRef.current !== 'ready') return { error: 'DuckDB is still starting. Try again when the workspace is ready.' };
     setActiveCellId(id);
-    updateCell(id, { running: true, error: undefined });
+    updateCellInNotebook(notebookId, id, { running: true, error: undefined });
     try {
       const result = await duckdbWorkspace.run(cell.sql, datasets);
       const execution = cell.kind === 'quality' && cell.quality
@@ -330,15 +311,20 @@ export function DevelopmentWorkspace() {
           ranAt: new Date(),
         } satisfies QualityExecution
         : undefined;
-      updateCell(id, { running: false, result, qualityExecution: execution });
+      updateCellInNotebook(notebookId, id, { running: false, result, qualityExecution: execution });
       setResultSearch('');
       await refreshTables();
+      return { result };
     } catch (error) {
-      updateCell(id, { running: false, error: error instanceof Error ? error.message : 'Query execution failed.' });
+      const message = error instanceof Error ? error.message : 'Query execution failed.';
+      updateCellInNotebook(notebookId, id, { running: false, error: message });
+      return { error: message };
     }
-  };
+  }, [datasets, notebooksRef, statusRef, refreshTables, setActiveCellId, updateCellInNotebook]);
 
-  const resetSession = async () => {
+  const runCell = async (id: string) => executeCell(activeNotebookId, id);
+
+  const resetSession = useCallback(async () => {
     try {
       setStatus('loading');
       setStatusMessage('Resetting the local workspace…');
@@ -358,7 +344,7 @@ export function DevelopmentWorkspace() {
       setStatus('error');
       setStatusMessage(error instanceof Error ? error.message : 'The workspace could not be reset.');
     }
-  };
+  }, [clearEphemeralBundles, datasets, setExpiresAt, setNotebooks, setPublishedDatasetId, setStatus, setTables]);
 
   const catalogTables = useMemo(
     () => tables.filter((table) => table.schema === 'happy_coffee' && table.name.includes(explorerQuery.toLowerCase())),
@@ -517,6 +503,152 @@ export function DevelopmentWorkspace() {
       setPublishing(false);
     }
   };
+
+  useEffect(() => {
+    const respond = (message: string, data?: unknown): DevelopmentBridgeResult => ({ ok: true, message, data });
+    const fail = (message: string): DevelopmentBridgeResult => ({ ok: false, message });
+    const findCell = (cellId: string) => {
+      const notebook = notebooksRef.current.find((item) => item.cells.some((cell) => cell.id === cellId));
+      return { notebook, cell: notebook?.cells.find((cell) => cell.id === cellId) };
+    };
+    const handleAction = async (action: DevelopmentBridgeAction): Promise<DevelopmentBridgeResult> => {
+      switch (action.type) {
+        case 'inspect':
+          return respond('Current development workspace state.', {
+            status: statusRef.current, expiresAt: expiresAtRef.current,
+            activeNotebookId: activeNotebookIdRef.current, activeCellId: activeCellIdRef.current,
+            bottomTab: bottomTabRef.current,
+            notebooks: notebooksRef.current.map((notebook) => ({
+              id: notebook.id, name: notebook.name,
+              cells: notebook.cells.map((cell, index) => ({
+                id: cell.id, index: index + 1, kind: cell.kind, sql: cell.sql,
+                quality: cell.quality, running: Boolean(cell.running), error: cell.error,
+                result: cell.result ? { columns: cell.result.columns, rowCount: cell.result.rowCount, elapsedMs: cell.result.elapsedMs, rows: cell.result.rows } : undefined,
+                qualityExecution: cell.qualityExecution,
+              })),
+            })),
+            publicationDraft: { ...draftRef.current, publishedDatasetId: publishedDatasetIdRef.current, publishRequiresUserClick: true },
+            catalogTableCount: tablesRef.current.filter((table) => table.schema === 'happy_coffee').length,
+            workspaceTables: tablesRef.current.filter((table) => table.schema === 'workspace'),
+          });
+        case 'create-notebook': {
+          const notebook = makeNotebook(action.name?.trim() || `Untitled query ${notebooksRef.current.length + 1}`);
+          setNotebooks((current) => [...current, notebook]);
+          setActiveNotebookId(notebook.id);
+          setActiveCellId(notebook.cells[0].id);
+          return respond(`Created and selected notebook ${notebook.name}.`, { notebookId: notebook.id, cellId: notebook.cells[0].id });
+        }
+        case 'select-notebook': {
+          const notebook = notebooksRef.current.find((item) => item.id === action.notebookId);
+          if (!notebook) return fail('Notebook not found. Call inspect_development_workspace to get available notebook IDs.');
+          setActiveNotebookId(notebook.id);
+          setActiveCellId(notebook.cells[0]?.id ?? '');
+          return respond(`Selected notebook ${notebook.name}.`, { notebookId: notebook.id });
+        }
+        case 'close-notebook': {
+          const current = notebooksRef.current;
+          if (current.length === 1) return fail('The only notebook cannot be closed. Delete its cells or create another notebook first.');
+          const remaining = current.filter((item) => item.id !== action.notebookId);
+          if (remaining.length === current.length) return fail('Notebook not found.');
+          setNotebooks(remaining);
+          if (activeNotebookIdRef.current === action.notebookId) {
+            setActiveNotebookId(remaining[0].id);
+            setActiveCellId(remaining[0].cells[0]?.id ?? '');
+          }
+          return respond('Closed notebook.', { notebookId: action.notebookId });
+        }
+        case 'create-cell': {
+          if (!action.sql.trim()) return fail('SQL is required to create a cell.');
+          const notebookId = action.notebookId ?? activeNotebookIdRef.current;
+          const notebook = notebooksRef.current.find((item) => item.id === notebookId);
+          if (!notebook) return fail('Notebook not found.');
+          const kind = action.kind ?? 'query';
+          const cell = makeCell(action.sql, kind);
+          if (kind === 'quality') cell.quality = { name: action.name?.trim() || 'Untitled quality check', description: action.description ?? '', severity: action.severity ?? 'Warning' };
+          setNotebooks((current) => current.map((item) => item.id === notebookId ? { ...item, cells: [...item.cells, cell] } : item));
+          if (action.activate !== false) {
+            setActiveNotebookId(notebookId);
+            setActiveCellId(cell.id);
+          }
+          return respond(`Created ${kind === 'quality' ? 'quality-check' : 'query'} cell.`, { notebookId, cellId: cell.id });
+        }
+        case 'update-cell': {
+          const { notebook, cell } = findCell(action.cellId);
+          if (!notebook || !cell) return fail('Cell not found. Call inspect_development_workspace to get valid cell IDs.');
+          const kind = action.kind ?? cell.kind;
+          const quality = kind === 'quality'
+            ? { name: action.name?.trim() || cell.quality?.name || 'Untitled quality check', description: action.description ?? cell.quality?.description ?? '', severity: action.severity ?? cell.quality?.severity ?? 'Warning' }
+            : undefined;
+          updateCellInNotebook(notebook.id, cell.id, {
+            kind, quality,
+            sql: action.sql ?? cell.sql,
+            result: action.sql === undefined ? cell.result : undefined,
+            error: action.sql === undefined ? cell.error : undefined,
+            qualityExecution: action.sql === undefined ? cell.qualityExecution : undefined,
+          });
+          return respond('Updated development cell.', { notebookId: notebook.id, cellId: cell.id, kind });
+        }
+        case 'delete-cell': {
+          const { notebook, cell } = findCell(action.cellId);
+          if (!notebook || !cell) return fail('Cell not found.');
+          const remainingCells = notebook.cells.filter((item) => item.id !== cell.id);
+          setNotebooks((current) => current.map((item) => item.id === notebook.id ? { ...item, cells: remainingCells } : item));
+          if (activeCellIdRef.current === cell.id) setActiveCellId(remainingCells[0]?.id ?? '');
+          return respond('Deleted development cell.', { notebookId: notebook.id, cellId: cell.id });
+        }
+        case 'run-cell': {
+          const { notebook, cell } = findCell(action.cellId);
+          if (!notebook || !cell) return fail('Cell not found.');
+          setActiveNotebookId(notebook.id);
+          const execution = await executeCell(notebook.id, cell.id);
+          if (execution.error) return fail(execution.error);
+          return respond('Executed development cell.', { notebookId: notebook.id, cellId: cell.id, result: execution.result });
+        }
+        case 'reset-workspace':
+          await resetSession();
+          return respond('Reset the local DuckDB workspace and removed ephemeral published bundles.');
+        case 'prepare-publication': {
+          const source = action.sourceCellId ? findCell(action.sourceCellId) : undefined;
+          if (action.sourceCellId && (!source?.notebook || !source.cell || source.cell.kind !== 'query')) return fail('The publication source must be a query cell.');
+          if (source?.notebook) {
+            setActiveNotebookId(source.notebook.id);
+            setActiveCellId(source.cell!.id);
+          }
+          const qualityIds = action.qualityCellIds;
+          if (qualityIds?.some((id) => findCell(id).cell?.kind !== 'quality')) return fail('Every selected quality cell must exist and be marked as a quality check.');
+          setDraft((current) => ({
+            ...current,
+            sourceCellId: action.sourceCellId ?? current.sourceCellId,
+            name: action.name ?? current.name,
+            displayName: action.displayName ?? current.displayName,
+            description: action.description ?? current.description,
+            owner: action.owner ?? current.owner,
+            tags: action.tags ?? current.tags,
+            criticality: action.criticality ?? current.criticality,
+            frequency: action.frequency ?? current.frequency,
+            cron: action.cron ?? (action.frequency ? cronForFrequency(action.frequency) : current.cron),
+            transformations: action.transformations ?? current.transformations,
+            includedQualityCellIds: qualityIds ?? current.includedQualityCellIds,
+            fieldDescriptions: action.fieldDescriptions ? { ...current.fieldDescriptions, ...action.fieldDescriptions } : current.fieldDescriptions,
+          }));
+          setPublicationError('');
+          setBottomTab('publishing');
+          return respond('Prepared Table Publishing. The user must review and click Publish table; agents cannot publish.', { sourceCellId: draftRef.current.sourceCellId, requiresUserPublish: true });
+        }
+        case 'set-view':
+          if (action.bottomTab) setBottomTab(action.bottomTab);
+          if (action.explorerCollapsed !== undefined) setExplorerCollapsed(action.explorerCollapsed);
+          return respond('Updated development workspace view.');
+        default:
+          return fail('Unsupported development workspace action.');
+      }
+    };
+    return registerDevelopmentActionHandler(handleAction);
+  }, [
+    activeCellIdRef, activeNotebookIdRef, bottomTabRef, draftRef, executeCell, expiresAtRef, notebooksRef,
+    publishedDatasetIdRef, resetSession, setActiveCellId, setActiveNotebookId, setBottomTab, setDraft,
+    setExplorerCollapsed, setNotebooks, setPublicationError, statusRef, tablesRef, updateCellInNotebook,
+  ]);
 
   return (
     <div className="-m-4 sm:-m-6 h-screen min-h-[640px] overflow-hidden bg-[#f7f8fa] text-cream-900 flex flex-col">

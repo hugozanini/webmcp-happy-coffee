@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useCatalogData } from '../../hooks/useCatalogData';
 import { useCatalogStore } from '../../store/catalog-store';
-import { DEVELOPMENT_NOTEBOOK_EVENT } from '../../lib/development-events';
+import { requestDevelopmentAction } from '../../lib/development-bridge';
 
 // ------------------------------------------------------------------
 // Shared execution logic for the WebMCP catalog tools.
@@ -11,16 +11,6 @@ export type ToolResult = { content: Array<{ type: string; text: string }> };
 
 function text(str: string): ToolResult {
   return { content: [{ type: 'text', text: str }] };
-}
-
-function addDevelopmentCell(detail: {
-  id: string;
-  sql: string;
-  kind: 'query' | 'quality';
-  quality?: { name: string; description: string; severity: 'Info' | 'Warning' | 'Error' | 'Critical' };
-  result?: unknown;
-}) {
-  window.dispatchEvent(new CustomEvent(DEVELOPMENT_NOTEBOOK_EVENT, { detail: { type: 'add-cell', ...detail } }));
 }
 
 export function useCatalogTools() {
@@ -53,18 +43,17 @@ export function useCatalogTools() {
       case 'run_duckdb_sql': {
         const sql = args['sql'] as string;
         navigate('/develop');
-        try {
-          const { duckdbWorkspace } = await import('../../lib/duckdb-workspace');
-          const result = await duckdbWorkspace.run(sql, datasets, { source: 'agent' });
-          addDevelopmentCell({ id: `agent-${Date.now()}`, sql, kind: 'query', result });
-          return text(
-            `Ran SQL in the Happy Coffee browser workspace and added it as a visible notebook cell.\n` +
-            `Rows: ${result.rowCount}; elapsed: ${result.elapsedMs} ms${result.truncated ? '; first 250 rows returned' : ''}.\n\n` +
-            `${JSON.stringify(result.rows, null, 2)}`,
-          );
-        } catch (error) {
-          return text(`SQL execution failed: ${error instanceof Error ? error.message : 'unknown error'}`);
-        }
+        const created = await requestDevelopmentAction({ type: 'create-cell', sql, kind: 'query', activate: true });
+        if (!created.ok) return text(`Could not create the visible SQL cell: ${created.message}`);
+        const { cellId } = created.data as { cellId: string };
+        const execution = await requestDevelopmentAction({ type: 'run-cell', cellId });
+        if (!execution.ok) return text(`SQL execution failed: ${execution.message}`);
+        const result = (execution.data as { result: { rowCount: number; elapsedMs: number; truncated: boolean; rows: unknown[] } }).result;
+        return text(
+          `Ran SQL in the Happy Coffee browser workspace and added it as a visible notebook cell.\n` +
+          `Rows: ${result.rowCount}; elapsed: ${result.elapsedMs} ms${result.truncated ? '; first 250 rows returned' : ''}.\n\n` +
+          `${JSON.stringify(result.rows, null, 2)}`,
+        );
       }
 
       // ----------------------------------------------------------------
@@ -100,8 +89,9 @@ export function useCatalogTools() {
 
       // ----------------------------------------------------------------
       case 'create_development_sql_cell': {
-        const { sql, kind = 'query', name = '', description = '', severity = 'Warning' } = args as {
+        const { sql, notebookId, kind = 'query', name = '', description = '', severity = 'Warning' } = args as {
           sql: string;
+          notebookId?: string;
           kind?: 'query' | 'quality';
           name?: string;
           description?: string;
@@ -109,19 +99,93 @@ export function useCatalogTools() {
         };
         if (!sql?.trim()) return text('SQL is required to create a notebook cell.');
         navigate('/develop');
-        const id = `agent-${Date.now()}`;
-        addDevelopmentCell({
-          id, sql, kind,
-          quality: kind === 'quality' ? { name: name || 'Agent quality check', description, severity } : undefined,
-        });
-        return text(`Added ${kind === 'quality' ? 'a quality-check' : 'a query'} cell to the visible development notebook. Cell ID: ${id}.`);
+        const result = await requestDevelopmentAction({ type: 'create-cell', notebookId, sql, kind, name, description, severity, activate: true });
+        if (!result.ok) return text(`Could not create the notebook cell: ${result.message}`);
+        return text(`Added ${kind === 'quality' ? 'a quality-check' : 'a query'} cell to the visible development notebook. ${JSON.stringify(result.data)}`);
       }
 
       // ----------------------------------------------------------------
       case 'open_table_publishing': {
         navigate('/develop');
-        window.dispatchEvent(new CustomEvent(DEVELOPMENT_NOTEBOOK_EVENT, { detail: { type: 'open-publishing' } }));
-        return text('Opened Table Publishing in the development workspace. Select the query cell, add metadata and schedule, then publish the mock data product.');
+        const result = await requestDevelopmentAction({ type: 'set-view', bottomTab: 'publishing' });
+        return text(result.ok
+          ? 'Opened Table Publishing in the development workspace. Select the query cell, add metadata and schedule, then let the user click Publish table.'
+          : `Could not open Table Publishing: ${result.message}`);
+      }
+
+      // ----------------------------------------------------------------
+      case 'inspect_development_workspace': {
+        navigate('/develop');
+        const result = await requestDevelopmentAction({ type: 'inspect' });
+        return text(result.ok ? JSON.stringify(result.data, null, 2) : `Could not inspect the development workspace: ${result.message}`);
+      }
+
+      // ----------------------------------------------------------------
+      case 'create_development_notebook': {
+        navigate('/develop');
+        const result = await requestDevelopmentAction({ type: 'create-notebook', name: args['name'] as string | undefined });
+        return text(result.ok ? `${result.message}\n${JSON.stringify(result.data)}` : result.message);
+      }
+
+      // ----------------------------------------------------------------
+      case 'select_development_notebook': {
+        navigate('/develop');
+        const result = await requestDevelopmentAction({ type: 'select-notebook', notebookId: args['notebookId'] as string });
+        return text(result.message);
+      }
+
+      // ----------------------------------------------------------------
+      case 'close_development_notebook': {
+        navigate('/develop');
+        const result = await requestDevelopmentAction({ type: 'close-notebook', notebookId: args['notebookId'] as string });
+        return text(result.message);
+      }
+
+      // ----------------------------------------------------------------
+      case 'update_development_sql_cell': {
+        navigate('/develop');
+        const result = await requestDevelopmentAction({
+          type: 'update-cell', cellId: args['cellId'] as string, sql: args['sql'] as string | undefined,
+          kind: args['kind'] as 'query' | 'quality' | undefined, name: args['name'] as string | undefined,
+          description: args['description'] as string | undefined, severity: args['severity'] as 'Info' | 'Warning' | 'Error' | 'Critical' | undefined,
+        });
+        return text(result.message);
+      }
+
+      // ----------------------------------------------------------------
+      case 'delete_development_sql_cell': {
+        navigate('/develop');
+        const result = await requestDevelopmentAction({ type: 'delete-cell', cellId: args['cellId'] as string });
+        return text(result.message);
+      }
+
+      // ----------------------------------------------------------------
+      case 'run_development_sql_cell': {
+        navigate('/develop');
+        const result = await requestDevelopmentAction({ type: 'run-cell', cellId: args['cellId'] as string });
+        return text(result.ok ? `${result.message}\n${JSON.stringify(result.data, null, 2)}` : result.message);
+      }
+
+      // ----------------------------------------------------------------
+      case 'prepare_table_publication': {
+        navigate('/develop');
+        const result = await requestDevelopmentAction({
+          type: 'prepare-publication', sourceCellId: args['sourceCellId'] as string | undefined,
+          name: args['name'] as string | undefined, displayName: args['displayName'] as string | undefined,
+          description: args['description'] as string | undefined, owner: args['owner'] as string | undefined,
+          tags: args['tags'] as string | undefined, criticality: args['criticality'] as 'Critical' | 'High' | 'Medium' | 'Low' | undefined,
+          frequency: args['frequency'] as string | undefined, cron: args['cron'] as string | undefined,
+          transformations: args['transformations'] as string | undefined, qualityCellIds: args['qualityCellIds'] as string[] | undefined,
+          fieldDescriptions: args['fieldDescriptions'] as Record<string, string> | undefined,
+        });
+        return text(result.message);
+      }
+
+      // ----------------------------------------------------------------
+      case 'reset_development_workspace': {
+        navigate('/develop');
+        const result = await requestDevelopmentAction({ type: 'reset-workspace' });
+        return text(result.message);
       }
 
       // ----------------------------------------------------------------
