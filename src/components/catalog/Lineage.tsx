@@ -21,12 +21,12 @@ import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import clsx from 'clsx';
 
 const typeConfig: Record<string, { color: string; bg: string; border: string; icon: typeof Database }> = {
-  Source:    { color: 'text-red-400',     bg: 'bg-red-950/50',     border: 'border-red-700',    icon: Database },
-  Ingestion: { color: 'text-orange-400',  bg: 'bg-orange-950/50',  border: 'border-orange-700', icon: ArrowRightLeft },
-  Bronze:   { color: 'text-amber-400',    bg: 'bg-amber-950/50',   border: 'border-amber-700',  icon: Layers },
-  Silver:   { color: 'text-gray-300',     bg: 'bg-gray-800/50',    border: 'border-gray-600',   icon: Gem },
-  Gold:     { color: 'text-yellow-400',   bg: 'bg-yellow-950/50',  border: 'border-yellow-700', icon: Crown },
-  BI:       { color: 'text-blue-400',     bg: 'bg-blue-950/50',    border: 'border-blue-700',   icon: BarChart3 },
+  Source:    { color: 'text-red-700',     bg: 'bg-red-50',     border: 'border-red-200',    icon: Database },
+  Ingestion: { color: 'text-orange-700',  bg: 'bg-orange-50',  border: 'border-orange-200', icon: ArrowRightLeft },
+  Bronze:   { color: 'text-amber-700',    bg: 'bg-amber-50',   border: 'border-amber-200',  icon: Layers },
+  Silver:   { color: 'text-brand-700',    bg: 'bg-brand-50',   border: 'border-brand-200',  icon: Gem },
+  Gold:     { color: 'text-yellow-700',   bg: 'bg-yellow-50',  border: 'border-yellow-200', icon: Crown },
+  BI:       { color: 'text-blue-700',     bg: 'bg-blue-50',    border: 'border-blue-200',   icon: BarChart3 },
 };
 
 function LineageNode({ data }: { data: { label: string; type: string; location: string; metadata: Record<string, unknown> } }) {
@@ -35,16 +35,16 @@ function LineageNode({ data }: { data: { label: string; type: string; location: 
 
   return (
     <div className={clsx('rounded-lg border px-4 py-3 min-w-[180px] max-w-[220px]', config.bg, config.border)}>
-      <Handle type="target" position={Position.Left} className="!bg-gray-500 !w-2 !h-2 !border-0" />
+      <Handle type="target" position={Position.Left} className="!bg-cream-400 !w-2 !h-2 !border-0" />
       <div className="flex items-center gap-2 mb-1.5">
         <Icon className={clsx('w-4 h-4 flex-shrink-0', config.color)} />
         <span className={clsx('text-[10px] font-semibold uppercase tracking-wider', config.color)}>
           {data.type}
         </span>
       </div>
-      <p className="text-sm font-medium text-gray-100 leading-tight mb-0.5 truncate">{data.label}</p>
-      <p className="text-[11px] text-gray-400 truncate">{data.location}</p>
-      <Handle type="source" position={Position.Right} className="!bg-gray-500 !w-2 !h-2 !border-0" />
+      <p className="text-sm font-medium text-cream-900 leading-tight mb-0.5 truncate">{data.label}</p>
+      <p className="text-[11px] text-cream-500 truncate">{data.location}</p>
+      <Handle type="source" position={Position.Right} className="!bg-cream-400 !w-2 !h-2 !border-0" />
     </div>
   );
 }
@@ -115,8 +115,8 @@ export function Lineage() {
         source: n.parentId!,
         target: n.id,
         animated: true,
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#6b7280' },
-        style: { stroke: '#4b5563', strokeWidth: 2 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#a3a3a3' },
+        style: { stroke: '#a3a3a3', strokeWidth: 2 },
       }));
 
     const laid = layoutGraph(flowNodes, flowEdges);
@@ -147,7 +147,7 @@ export function Lineage() {
         }
       />
 
-      <div className="flex flex-wrap gap-1.5 mb-4">
+      <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1 scrollbar-thin">
         <button
           onClick={() => setSelectedDataset(null)}
           className={clsx(
@@ -175,7 +175,7 @@ export function Lineage() {
         ))}
       </div>
 
-      <div className="h-[600px] bg-gray-900 rounded-xl border border-gray-700 overflow-hidden">
+      <div className="h-[460px] sm:h-[600px] bg-white rounded-xl border border-cream-200 shadow-card overflow-hidden">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -186,14 +186,14 @@ export function Lineage() {
           maxZoom={2}
           proOptions={{ hideAttribution: true }}
         >
-          <Background color="#374151" gap={20} size={1} />
+          <Background color="#e5e5e5" gap={20} size={1} />
           <Controls
-            className="!bg-gray-800 !border-gray-700 !rounded-lg [&>button]:!bg-gray-800 [&>button]:!border-gray-700 [&>button]:!text-gray-400 [&>button:hover]:!bg-gray-700"
+            className="!bg-white !border-cream-200 !rounded-lg !shadow-card [&>button]:!bg-white [&>button]:!border-cream-200 [&>button]:!text-cream-600 [&>button:hover]:!bg-cream-50"
           />
           <MiniMap
-            className="!bg-gray-800 !border-gray-700 !rounded-lg"
-            nodeColor="#4b5563"
-            maskColor="rgba(0,0,0,0.5)"
+            className="!bg-white !border-cream-200 !rounded-lg"
+            nodeColor="#a3a3a3"
+            maskColor="rgba(245,245,245,0.75)"
           />
         </ReactFlow>
       </div>

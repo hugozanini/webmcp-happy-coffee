@@ -44,23 +44,23 @@ import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import clsx from 'clsx';
 
 const typeNodeConfig: Record<string, { color: string; bg: string; border: string }> = {
-  Source: { color: 'text-red-400', bg: 'bg-red-950/50', border: 'border-red-700' },
-  Ingestion: { color: 'text-orange-400', bg: 'bg-orange-950/50', border: 'border-orange-700' },
-  Bronze: { color: 'text-amber-400', bg: 'bg-amber-950/50', border: 'border-amber-700' },
-  Silver: { color: 'text-gray-300', bg: 'bg-gray-800/50', border: 'border-gray-600' },
-  Gold: { color: 'text-yellow-400', bg: 'bg-yellow-950/50', border: 'border-yellow-700' },
-  BI: { color: 'text-blue-400', bg: 'bg-blue-950/50', border: 'border-blue-700' },
+  Source: { color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200' },
+  Ingestion: { color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200' },
+  Bronze: { color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200' },
+  Silver: { color: 'text-brand-700', bg: 'bg-brand-50', border: 'border-brand-200' },
+  Gold: { color: 'text-yellow-700', bg: 'bg-yellow-50', border: 'border-yellow-200' },
+  BI: { color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' },
 };
 
 function MiniLineageNode({ data }: { data: { label: string; type: string; location: string } }) {
   const config = typeNodeConfig[data.type] || typeNodeConfig.Source;
   return (
     <div className={clsx('rounded-lg border px-3 py-2 min-w-[160px]', config.bg, config.border)}>
-      <Handle type="target" position={Position.Left} className="!bg-gray-500 !w-2 !h-2 !border-0" />
+      <Handle type="target" position={Position.Left} className="!bg-cream-400 !w-2 !h-2 !border-0" />
       <p className={clsx('text-[10px] font-semibold uppercase tracking-wider mb-0.5', config.color)}>{data.type}</p>
-      <p className="text-xs font-medium text-gray-100 truncate">{data.label}</p>
-      <p className="text-[10px] text-gray-400 truncate">{data.location}</p>
-      <Handle type="source" position={Position.Right} className="!bg-gray-500 !w-2 !h-2 !border-0" />
+      <p className="text-xs font-medium text-cream-900 truncate">{data.label}</p>
+      <p className="text-[10px] text-cream-500 truncate">{data.location}</p>
+      <Handle type="source" position={Position.Right} className="!bg-cream-400 !w-2 !h-2 !border-0" />
     </div>
   );
 }
@@ -165,8 +165,8 @@ export function DatasetDetail() {
     }));
     const edges: Edge[] = relevant.filter((n) => n.parentId).map((n) => ({
       id: `${n.parentId}-${n.id}`, source: n.parentId!, target: n.id,
-      animated: true, markerEnd: { type: MarkerType.ArrowClosed, color: '#6b7280' },
-      style: { stroke: '#4b5563', strokeWidth: 2 },
+      animated: true, markerEnd: { type: MarkerType.ArrowClosed, color: '#a3a3a3' },
+      style: { stroke: '#a3a3a3', strokeWidth: 2 },
     }));
     return { nodes: layoutMiniGraph(nodes, edges), edges };
   }, [id, lineage]);
@@ -271,8 +271,8 @@ export function DatasetDetail() {
         Back to Datasets
       </button>
 
-      <div className="bg-white border border-cream-200 rounded-xl shadow-card p-6 mb-6">
-        <div className="flex items-start justify-between mb-4">
+      <div className="bg-white border border-cream-200 rounded-xl shadow-card p-4 sm:p-6 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <Database className="w-5 h-5 text-cream-400" />
@@ -281,7 +281,7 @@ export function DatasetDetail() {
             <p className="text-sm text-cream-500 font-mono">{dataset.schema.database}.{dataset.schema.schema}.{dataset.name}</p>
             <p className="text-sm text-cream-600 mt-1">{dataset.description}</p>
           </div>
-          <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex items-center gap-3 self-start flex-shrink-0">
             <div className={clsx('flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold', critConf.bg, critConf.border, critConf.color)}>
               <Shield className="w-3.5 h-3.5" />
               {dataset.criticality}
@@ -292,7 +292,7 @@ export function DatasetDetail() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 py-3 border-t border-b border-cream-100">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4 py-3 border-t border-b border-cream-100">
           <div className="flex items-center gap-2 text-xs">
             <RefreshCw className="w-3.5 h-3.5 text-cream-400" />
             <div>
@@ -331,8 +331,8 @@ export function DatasetDetail() {
         </div>
       </div>
 
-      <div className="border-b border-cream-200 mb-6">
-        <div className="flex gap-1">
+      <div className="border-b border-cream-200 mb-6 overflow-x-auto scrollbar-thin">
+        <div className="flex gap-1 min-w-max">
           {tabs.map((t) => (
             <button
               key={t.key}
@@ -371,7 +371,7 @@ export function DatasetDetail() {
       </div>
 
       {tab === 'overview' && (
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-cream-800">Schema & Structure</h3>
             <div className="bg-white border border-cream-200 rounded-xl p-4 space-y-3">
@@ -471,7 +471,7 @@ export function DatasetDetail() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               <div className="bg-white border border-cream-200 rounded-xl shadow-card p-4">
                 <p className="text-xs text-cream-500 mb-1 uppercase tracking-wide">Checks Failed</p>
                 <div className="flex items-baseline gap-2">
@@ -542,7 +542,7 @@ export function DatasetDetail() {
 
             <div className="bg-white border border-cream-200 rounded-xl shadow-card p-4">
               <h3 className="text-sm font-semibold text-cream-800 mb-3">Activity</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-emerald-500" />
                   <div>
@@ -578,7 +578,7 @@ export function DatasetDetail() {
       })()}
 
       {tab === 'lineage' && (
-        <div className="h-[400px] bg-gray-900 rounded-xl border border-gray-700 overflow-hidden">
+        <div className="h-[360px] sm:h-[400px] bg-white rounded-xl border border-cream-200 shadow-card overflow-hidden">
           {datasetLineage.nodes.length > 0 ? (
             <ReactFlow
               nodes={datasetLineage.nodes}
@@ -589,11 +589,11 @@ export function DatasetDetail() {
               maxZoom={2}
               proOptions={{ hideAttribution: true }}
             >
-              <Background color="#374151" gap={20} size={1} />
-              <Controls className="!bg-gray-800 !border-gray-700 !rounded-lg [&>button]:!bg-gray-800 [&>button]:!border-gray-700 [&>button]:!text-gray-400 [&>button:hover]:!bg-gray-700" />
+              <Background color="#e5e5e5" gap={20} size={1} />
+              <Controls className="!bg-white !border-cream-200 !rounded-lg !shadow-card [&>button]:!bg-white [&>button]:!border-cream-200 [&>button]:!text-cream-600 [&>button:hover]:!bg-cream-50" />
             </ReactFlow>
           ) : (
-            <div className="flex items-center justify-center h-full text-gray-500 text-sm">
+            <div className="flex items-center justify-center h-full text-cream-500 text-sm">
               No lineage data available for this dataset
             </div>
           )}
