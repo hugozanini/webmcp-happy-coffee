@@ -51,25 +51,25 @@ export function Sidebar() {
     <aside
       className={clsx(
         'bg-brand-950 text-cream-300 flex flex-col flex-shrink-0 h-screen sticky top-0 transition-[width] duration-200 ease-out',
-        collapsed ? 'w-16' : 'w-16 lg:w-60',
+        collapsed ? 'w-16' : 'w-16 md:w-60',
       )}
     >
-      <div className={clsx('py-5 border-b border-brand-800', collapsed ? 'px-3' : 'px-3 lg:px-4')}>
+      <div className={clsx('py-5 border-b border-brand-800', collapsed ? 'px-3' : 'px-3 md:px-4')}>
         <Link
           to="/"
           title="Happy Coffee home"
-          className={clsx('flex items-center text-white', collapsed ? 'justify-center' : 'justify-center lg:justify-start lg:gap-2.5')}
+          className={clsx('flex items-center text-white', collapsed ? 'justify-center' : 'justify-center md:justify-start md:gap-2.5')}
           style={{ '--logo-inner': '#0a0a0a' } as React.CSSProperties}
         >
           <Logo size={collapsed ? 34 : 40} />
-          <div className={clsx('min-w-0', collapsed ? 'hidden' : 'hidden lg:block')}>
+          <div className={clsx('min-w-0', collapsed ? 'hidden' : 'hidden md:block')}>
             <h1 className="text-base font-semibold text-white leading-tight">Happy Coffee</h1>
             <p className="text-xs text-cream-500 leading-tight">Data Developer Portal</p>
           </div>
         </Link>
       </div>
 
-      <nav className={clsx('flex-1 py-4 space-y-0.5 overflow-y-auto scrollbar-thin', collapsed ? 'px-2' : 'px-2 lg:px-3')}>
+      <nav className={clsx('flex-1 py-4 space-y-0.5 overflow-y-auto scrollbar-thin', collapsed ? 'px-2' : 'px-2 md:px-3')}>
         {navItems.map(({ path, label, icon: Icon, countKey }) => {
           const isActive = path === '/'
             ? location.pathname === '/'
@@ -83,15 +83,15 @@ export function Sidebar() {
               title={label}
               className={clsx(
                 'flex items-center px-3 py-2 rounded-lg text-sm transition-colors',
-                collapsed ? 'justify-center' : 'justify-center lg:justify-start lg:gap-2.5',
+                collapsed ? 'justify-center' : 'justify-center md:justify-start md:gap-2.5',
                 isActive
                   ? 'bg-brand-800 text-white font-medium'
                   : 'text-cream-400 hover:bg-brand-900 hover:text-cream-200'
               )}
               >
                 <Icon className="w-4 h-4 flex-shrink-0" />
-              <span className={clsx('flex-1', collapsed ? 'hidden' : 'hidden lg:inline')}>{label}</span>
-              <span className={clsx(collapsed ? 'hidden' : 'hidden lg:inline-flex')}>
+              <span className={clsx('flex-1', collapsed ? 'hidden' : 'hidden md:inline')}>{label}</span>
+              <span className={clsx(collapsed ? 'hidden' : 'hidden md:inline-flex')}>
               {path === '/costs' && costTrendUp !== null ? (
                 costTrendUp ? (
                   <TrendingUp className="w-3.5 h-3.5 text-red-400" />
@@ -112,7 +112,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className={clsx('hidden lg:block border-t border-brand-800 p-2', collapsed ? 'px-2' : 'px-3')}>
+      <div className={clsx('hidden md:block border-t border-brand-800 p-2', collapsed ? 'px-2' : 'px-3')}>
         <button
           type="button"
           onClick={() => setCollapsed((value) => !value)}
