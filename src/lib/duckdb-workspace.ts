@@ -19,6 +19,11 @@ export type QueryResult = {
   truncated: boolean;
 };
 
+export type WorkspaceRunOptions = {
+  notify?: boolean;
+  source?: 'user' | 'agent';
+};
+
 function valueForDisplay(value: unknown): unknown {
   if (typeof value === 'bigint') return value.toString();
   if (value instanceof Date) return value.toISOString();
@@ -106,7 +111,7 @@ class DuckDBWorkspace {
     return this.getSessionInfo();
   }
 
-  async run(sql: string, datasets: Dataset[], notify = true): Promise<QueryResult> {
+  async run(sql: string, datasets: Dataset[], options: WorkspaceRunOptions = {}): Promise<QueryResult> {
     if (!sql.trim()) throw new Error('Write a SQL statement before running it.');
     await this.prepare(datasets);
     const startedAt = performance.now();
@@ -114,7 +119,11 @@ class DuckDBWorkspace {
     const rows = tableRows(table);
     const rowCount = Number(table.numRows);
     this.scheduleExpiry();
-    if (notify) window.dispatchEvent(new Event(WORKSPACE_CHANGED_EVENT));
+    if (options.notify !== false) {
+      window.dispatchEvent(new CustomEvent(WORKSPACE_CHANGED_EVENT, {
+        detail: { source: options.source ?? 'user', sql },
+      }));
+    }
     return {
       columns: table.schema.fields.map((field) => ({ name: field.name, type: field.type.toString() })),
       rows,
@@ -131,7 +140,7 @@ class DuckDBWorkspace {
        WHERE table_schema IN ('happy_coffee', 'workspace')
        ORDER BY table_schema, table_name`,
       datasets,
-      false,
+      { notify: false },
     );
     return result.rows.map((row) => ({
       schema: String(row.schema),
@@ -140,12 +149,12 @@ class DuckDBWorkspace {
     }));
   }
 
-  async createTable(name: string, selectSql: string, datasets: Dataset[]) {
+  async createTable(name: string, selectSql: string, datasets: Dataset[], source: WorkspaceRunOptions['source'] = 'user') {
     const tableName = validateIdentifier(name, 'Table name');
     if (!/^\s*(select|with)\b/i.test(selectSql)) {
       throw new Error('The table definition must begin with SELECT or WITH.');
     }
-    await this.run(`CREATE OR REPLACE TABLE workspace.${tableName} AS ${selectSql}`, datasets);
+    await this.run(`CREATE OR REPLACE TABLE workspace.${tableName} AS ${selectSql}`, datasets, { source });
     return `workspace.${tableName}`;
   }
 

@@ -44,7 +44,7 @@ export function useCatalogTools() {
         navigate('/develop');
         try {
           const { duckdbWorkspace } = await import('../../lib/duckdb-workspace');
-          const result = await duckdbWorkspace.run(sql, datasets);
+          const result = await duckdbWorkspace.run(sql, datasets, { source: 'agent' });
           return text(
             `Ran SQL in the Happy Coffee browser workspace.\n` +
             `Rows: ${result.rowCount}; elapsed: ${result.elapsedMs} ms${result.truncated ? '; first 250 rows returned' : ''}.\n\n` +
@@ -61,7 +61,7 @@ export function useCatalogTools() {
         navigate('/develop');
         try {
           const { duckdbWorkspace } = await import('../../lib/duckdb-workspace');
-          const table = await duckdbWorkspace.createTable(name, selectSql, datasets);
+          const table = await duckdbWorkspace.createTable(name, selectSql, datasets, 'agent');
           const tables = await duckdbWorkspace.listTables(datasets);
           return text(
             `Created temporary table ${table}. It is visible in the development workspace and will be deleted when the 90-minute browser session expires.\n\n` +
