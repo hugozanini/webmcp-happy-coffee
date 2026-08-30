@@ -411,6 +411,21 @@ export function DatasetDetail() {
               </div>
             </div>
           </div>
+          {dataset.publication && <div className="space-y-4 lg:col-span-2">
+            <h3 className="text-sm font-semibold text-cream-800">Development & Operation</h3>
+            <div className="grid gap-4 rounded-xl border border-cream-200 bg-white p-4 lg:grid-cols-[1.15fr_0.85fr]">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-cream-700">Transformation</p>
+                <p className="mt-1 text-sm text-cream-600">{dataset.publication.transformations || 'No transformation summary provided.'}</p>
+                <pre className="mt-3 max-h-36 overflow-auto rounded-md border border-cream-200 bg-[#f3f4f6] p-3 text-[11px] leading-5 text-cream-700 scrollbar-thin">{dataset.publication.sourceSql}</pre>
+              </div>
+              <div className="space-y-3">
+                <div><p className="text-xs font-medium text-cream-700">Mock schedule</p><p className="mt-1 text-sm text-cream-600">{dataset.publication.schedule.frequency}{dataset.publication.schedule.cron ? ` · ${dataset.publication.schedule.cron}` : ''}</p></div>
+                <div><p className="text-xs font-medium text-cream-700">Quality checks</p><p className="mt-1 text-sm text-cream-600">{dataset.publication.qualityChecks.length ? dataset.publication.qualityChecks.map((check) => check.name).join(', ') : 'No quality checks configured'}</p></div>
+                <div className="rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-800">This published data product and its mock pipeline expire {new Date(dataset.publication.expiresAt).toLocaleString()}.</div>
+              </div>
+            </div>
+          </div>}
         </div>
       )}
 
