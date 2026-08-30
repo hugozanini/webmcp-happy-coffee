@@ -3,7 +3,7 @@ import CodeMirror from '@uiw/react-codemirror';
 import { sql } from '@codemirror/lang-sql';
 import { EditorView, keymap } from '@codemirror/view';
 import {
-  CheckCircle2, ChevronDown, Clock3, Code2, Database, Download,
+  AlertTriangle, CheckCircle2, ChevronDown, Clock3, Code2, Database, Download,
   LoaderCircle, PanelLeftClose, PanelLeftOpen, Play, Plus, RefreshCcw,
   RotateCcw, Search, Table2, X, XCircle,
 } from 'lucide-react';
@@ -12,10 +12,39 @@ import {
   duckdbWorkspace, WORKSPACE_CHANGED_EVENT, type QueryResult, type WorkspaceTable,
 } from '../../lib/duckdb-workspace';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { useNavigate } from 'react-router-dom';
+import type { Dataset, EphemeralPublicationBundle, Pipeline, PipelineRun, QualityEntry } from '../../data/types';
 import clsx from 'clsx';
 
-type Cell = { id: string; sql: string; result?: QueryResult; error?: string; running?: boolean };
+type QualitySeverity = QualityEntry['severity'];
+type QualityExecution = { result: 'Passed' | 'Warning' | 'Failed'; violations: number; elapsedMs: number; ranAt: Date };
+type QualityConfig = { name: string; description: string; severity: QualitySeverity };
+type Cell = {
+  id: string;
+  sql: string;
+  kind: 'query' | 'quality';
+  quality?: QualityConfig;
+  qualityExecution?: QualityExecution;
+  result?: QueryResult;
+  error?: string;
+  running?: boolean;
+};
 type Notebook = { id: string; name: string; cells: Cell[] };
+type BottomTab = 'results' | 'publishing';
+type PublishingDraft = {
+  sourceCellId: string;
+  name: string;
+  displayName: string;
+  description: string;
+  owner: string;
+  tags: string;
+  criticality: Dataset['criticality'];
+  frequency: string;
+  cron: string;
+  transformations: string;
+  includedQualityCellIds: string[];
+  fieldDescriptions: Record<string, string>;
+};
 
 const EXAMPLE_SQL = `SELECT
   variety,
@@ -35,8 +64,13 @@ const softSqlTheme = EditorView.theme({
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: '#bfdbfe' },
 });
 
-function makeCell(sql = ''): Cell {
-  return { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, sql };
+function makeCell(sql = '', kind: Cell['kind'] = 'query'): Cell {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    sql,
+    kind,
+    quality: kind === 'quality' ? { name: 'Untitled quality check', description: '', severity: 'Warning' } : undefined,
+  };
 }
 
 function makeNotebook(name: string, sql = ''): Notebook {
@@ -56,6 +90,19 @@ function formatCell(value: unknown) {
   }
   if (value === null || value === undefined) return 'null';
   return typeof value === 'object' ? JSON.stringify(value) : String(value);
+}
+
+function displayNameFor(name: string) {
+  return name.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function cronForFrequency(frequency: string) {
+  return ({ Manual: '', Hourly: '0 * * * *', Daily: '0 6 * * *', Weekly: '0 6 * * 1' } as Record<string, string>)[frequency] ?? '';
+}
+
+function qualityOutcome(violations: number, severity: QualitySeverity): QualityExecution['result'] {
+  if (violations === 0) return 'Passed';
+  return severity === 'Info' || severity === 'Warning' ? 'Warning' : 'Failed';
 }
 
 function ResultGrid({ result }: { result: QueryResult }) {
@@ -96,8 +143,28 @@ function ResultGrid({ result }: { result: QueryResult }) {
   );
 }
 
+function QualityExecutionCard({ execution, severity }: { execution: QualityExecution; severity: QualitySeverity }) {
+  const passed = execution.result === 'Passed';
+  const warned = execution.result === 'Warning';
+  const Icon = passed ? CheckCircle2 : AlertTriangle;
+  return (
+    <div className={clsx(
+      'flex items-center justify-between gap-3 border-t px-4 py-2.5 text-xs',
+      passed ? 'border-emerald-100 bg-emerald-50/70' : warned ? 'border-amber-100 bg-amber-50/70' : 'border-red-100 bg-red-50/70',
+    )}>
+      <div className="flex min-w-0 items-center gap-2">
+        <Icon className={clsx('h-4 w-4 flex-shrink-0', passed ? 'text-emerald-600' : warned ? 'text-amber-600' : 'text-red-600')} />
+        <span className="font-medium text-cream-800">{passed ? 'Check passed' : warned ? 'Check warned' : 'Check failed'}</span>
+        <span className="truncate text-cream-500">{execution.violations.toLocaleString()} {execution.violations === 1 ? 'violation' : 'violations'} · {severity}</span>
+      </div>
+      <span className="whitespace-nowrap text-[11px] text-cream-500">{execution.elapsedMs} ms</span>
+    </div>
+  );
+}
+
 export function DevelopmentWorkspace() {
-  const { datasets } = useCatalogData();
+  const { datasets, publishEphemeralBundle, clearEphemeralBundles } = useCatalogData();
+  const navigate = useNavigate();
   const [notebooks, setNotebooks] = useState<Notebook[]>(() => [makeNotebook('Inventory analysis', EXAMPLE_SQL)]);
   const [activeNotebookId, setActiveNotebookId] = useState(() => notebooks[0].id);
   const [activeCellId, setActiveCellId] = useState(() => notebooks[0].cells[0].id);
@@ -110,6 +177,16 @@ export function DevelopmentWorkspace() {
   const [statusMessage, setStatusMessage] = useState('Preparing your local DuckDB session…');
   const [expiresAt, setExpiresAt] = useState<Date | null>(null);
   const [resultSearch, setResultSearch] = useState('');
+  const [bottomTab, setBottomTab] = useState<BottomTab>('results');
+  const [publishing, setPublishing] = useState(false);
+  const [publicationError, setPublicationError] = useState('');
+  const [publishedDatasetId, setPublishedDatasetId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<PublishingDraft>(() => ({
+    sourceCellId: '', name: 'inventory_summary', displayName: 'Inventory Summary',
+    description: 'A curated inventory summary developed in the Happy Coffee workspace.', owner: 'Analytics',
+    tags: 'workspace, curated', criticality: 'Medium', frequency: 'Daily', cron: '0 6 * * *',
+    transformations: 'Aggregates Happy Coffee inventory by variety and grade.', includedQualityCellIds: [], fieldDescriptions: {},
+  }));
   useDocumentTitle('Develop with DuckDB');
 
   const activeNotebook = notebooks.find((notebook) => notebook.id === activeNotebookId) ?? notebooks[0];
@@ -164,6 +241,22 @@ export function DevelopmentWorkspace() {
     }));
   };
 
+  const setCellKind = (id: string, kind: Cell['kind']) => {
+    updateCell(id, {
+      kind,
+      quality: kind === 'quality'
+        ? activeNotebook.cells.find((cell) => cell.id === id)?.quality ?? { name: `Quality check ${activeNotebook.cells.findIndex((cell) => cell.id === id) + 1}`, description: '', severity: 'Warning' }
+        : undefined,
+      qualityExecution: kind === 'quality' ? activeNotebook.cells.find((cell) => cell.id === id)?.qualityExecution : undefined,
+    });
+  };
+
+  const updateQualityConfig = (id: string, patch: Partial<QualityConfig>) => {
+    const cell = activeNotebook.cells.find((item) => item.id === id);
+    if (!cell?.quality) return;
+    updateCell(id, { quality: { ...cell.quality, ...patch } });
+  };
+
   const addCell = (sql = '') => {
     const nextCell = makeCell(sql);
     updateNotebook(activeNotebookId, (notebook) => ({ ...notebook, cells: [...notebook.cells, nextCell] }));
@@ -194,7 +287,15 @@ export function DevelopmentWorkspace() {
     updateCell(id, { running: true, error: undefined });
     try {
       const result = await duckdbWorkspace.run(cell.sql, datasets);
-      updateCell(id, { running: false, result });
+      const execution = cell.kind === 'quality' && cell.quality
+        ? {
+          result: qualityOutcome(result.rowCount, cell.quality.severity),
+          violations: result.rowCount,
+          elapsedMs: result.elapsedMs,
+          ranAt: new Date(),
+        } satisfies QualityExecution
+        : undefined;
+      updateCell(id, { running: false, result, qualityExecution: execution });
       setResultSearch('');
       await refreshTables();
     } catch (error) {
@@ -207,14 +308,16 @@ export function DevelopmentWorkspace() {
       setStatus('loading');
       setStatusMessage('Resetting the local workspace…');
       await duckdbWorkspace.reset();
+      clearEphemeralBundles();
       const session = await duckdbWorkspace.prepare(datasets);
       const nextTables = await duckdbWorkspace.listTables(datasets);
       setTables(nextTables);
       setExpiresAt(session.expiresAt);
       setNotebooks((current) => current.map((notebook) => ({
         ...notebook,
-        cells: notebook.cells.map((cell) => ({ ...cell, result: undefined, error: undefined })),
+        cells: notebook.cells.map((cell) => ({ ...cell, result: undefined, error: undefined, qualityExecution: undefined })),
       })));
+      setPublishedDatasetId(null);
       setStatus('ready');
     } catch (error) {
       setStatus('error');
@@ -238,6 +341,147 @@ export function DevelopmentWorkspace() {
       rows: activeCell.result.rows.filter((row) => Object.values(row).some((value) => formatCell(value).toLowerCase().includes(query))),
     };
   }, [activeCell?.result, resultSearch]);
+
+  const sourceCells = useMemo(
+    () => activeNotebook.cells.filter((cell) => cell.kind === 'query' && /^\s*(select|with)\b/i.test(cell.sql)),
+    [activeNotebook.cells],
+  );
+  const qualityCells = useMemo(
+    () => activeNotebook.cells.filter((cell) => cell.kind === 'quality'),
+    [activeNotebook.cells],
+  );
+  const selectedSource = sourceCells.find((cell) => cell.id === draft.sourceCellId) ?? sourceCells[0];
+  const selectedQualityCells = qualityCells.filter((cell) => draft.includedQualityCellIds.includes(cell.id));
+
+  useEffect(() => {
+    setDraft((current) => {
+      const sourceCellId = sourceCells.some((cell) => cell.id === current.sourceCellId)
+        ? current.sourceCellId
+        : sourceCells[0]?.id ?? '';
+      const validQualityIds = new Set(qualityCells.map((cell) => cell.id));
+      const includedQualityCellIds = current.includedQualityCellIds.length
+        ? current.includedQualityCellIds.filter((id) => validQualityIds.has(id))
+        : qualityCells.map((cell) => cell.id);
+      if (sourceCellId === current.sourceCellId && includedQualityCellIds.join('|') === current.includedQualityCellIds.join('|')) return current;
+      return { ...current, sourceCellId, includedQualityCellIds };
+    });
+  }, [sourceCells, qualityCells]);
+
+  const selectSourceCell = (sourceCellId: string) => {
+    const source = sourceCells.find((cell) => cell.id === sourceCellId);
+    const descriptions = Object.fromEntries(source?.result?.columns.map((column) => [column.name, draft.fieldDescriptions[column.name] ?? '']) ?? []);
+    setDraft((current) => ({ ...current, sourceCellId, fieldDescriptions: descriptions }));
+  };
+
+  const publishTable = async () => {
+    if (!selectedSource) {
+      setPublicationError('Add a SELECT or WITH query cell before publishing a table.');
+      return;
+    }
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(draft.name)) {
+      setPublicationError('Table name must start with a letter or underscore and use only letters, numbers, and underscores.');
+      return;
+    }
+    if (datasets.some((dataset) => dataset.name === draft.name)) {
+      setPublicationError('A dataset with this table name already exists. Choose a different name.');
+      return;
+    }
+    const incompleteCheck = selectedQualityCells.find((cell) => !cell.sql.trim() || !cell.quality?.name.trim());
+    if (incompleteCheck) {
+      setPublicationError('Every included quality check needs a name and SQL statement.');
+      return;
+    }
+
+    setPublishing(true);
+    setPublicationError('');
+    try {
+      await duckdbWorkspace.createTable(draft.name, selectedSource.sql, datasets);
+      const publishedTable = `workspace.${draft.name}`;
+      const qualityEntries: QualityEntry[] = [];
+      let failed = 0;
+      let warned = 0;
+      for (const cell of selectedQualityCells) {
+        const definition = cell.quality!;
+        try {
+          const result = await duckdbWorkspace.run(cell.sql.replace(/{{published_table}}/g, publishedTable), datasets);
+          const outcome = qualityOutcome(result.rowCount, definition.severity);
+          updateCell(cell.id, { result, qualityExecution: { result: outcome, violations: result.rowCount, elapsedMs: result.elapsedMs, ranAt: new Date() } });
+          if (outcome === 'Failed') failed += 1;
+          if (outcome === 'Warning') warned += 1;
+          qualityEntries.push({
+            id: crypto.randomUUID(), timestamp: new Date(), checkType: 'Accuracy', severity: definition.severity,
+            datasetId: '', datasetName: draft.displayName || displayNameFor(draft.name),
+            message: outcome === 'Passed' ? `${definition.name} passed with no violations` : `${definition.name} found ${result.rowCount.toLocaleString()} violating rows`,
+            rule: definition.description || definition.name, result: outcome,
+            metadata: { executionTimeMs: result.elapsedMs, engine: 'DuckDB WASM', sql: cell.sql },
+          });
+        } catch (error) {
+          failed += 1;
+          const message = error instanceof Error ? error.message : 'Quality check execution failed.';
+          updateCell(cell.id, { error: message, qualityExecution: { result: 'Failed', violations: 0, elapsedMs: 0, ranAt: new Date() } });
+          qualityEntries.push({
+            id: crypto.randomUUID(), timestamp: new Date(), checkType: 'Accuracy', severity: definition.severity,
+            datasetId: '', datasetName: draft.displayName || displayNameFor(draft.name), message: `${definition.name} could not run`,
+            rule: definition.description || definition.name, result: 'Failed', metadata: { engine: 'DuckDB WASM', error: message, sql: cell.sql },
+          });
+        }
+      }
+
+      const result = selectedSource.result ?? await duckdbWorkspace.run(selectedSource.sql, datasets, { notify: false });
+      const bundleId = crypto.randomUUID();
+      const datasetId = crypto.randomUUID();
+      const pipelineId = crypto.randomUUID();
+      const displayName = draft.displayName.trim() || displayNameFor(draft.name);
+      const now = new Date();
+      const expiry = expiresAt ?? new Date(Date.now() + 90 * 60 * 1000);
+      const marker = `ephemeral-bundle:${bundleId}`;
+      const healthScore = Math.max(0, 100 - (failed * 25) - (warned * 10));
+      const fields = result.columns.map((column) => ({ name: column.name, type: column.type, description: draft.fieldDescriptions[column.name]?.trim() || 'Description pending' }));
+      const inputDatasetIds = datasets.filter((dataset) => selectedSource.sql.includes(`happy_coffee.${dataset.name}`)).map((dataset) => dataset.id);
+      const dataset: Dataset = {
+        id: datasetId, name: draft.name, displayName, type: 'Table', schema: { database: 'workspace', schema: 'published' },
+        description: draft.description.trim() || `Published from the ${activeNotebook.name} notebook.`, columns: fields.length,
+        rows: result.rowCount, sizeBytes: Math.max(1, new Blob([JSON.stringify(result.rows)]).size), owner: draft.owner.trim() || 'Analytics',
+        tags: [...draft.tags.split(',').map((tag) => tag.trim()).filter(Boolean), 'workspace', 'published', marker], qualityScore: healthScore,
+        criticality: draft.criticality, freshness: { lastUpdated: now, updateFrequency: draft.frequency }, source: 'DuckDB workspace', createdAt: now,
+        sampleData: result.rows.slice(0, 10), fields,
+        qualityDashboard: { checksFailed: failed, checksWarned: warned, healthScore, activeChecks: selectedQualityCells.length, avgAlertsPerDay: failed + warned, dailyChecks: [{ date: now.toISOString().slice(0, 10), pass: selectedQualityCells.length - failed - warned, warn: warned, fail: failed }] },
+        publication: {
+          sourceCellId: selectedSource.id, sourceSql: selectedSource.sql, transformations: draft.transformations,
+          schedule: { frequency: draft.frequency, cron: draft.cron },
+          qualityChecks: selectedQualityCells.map((cell) => ({ id: crypto.randomUUID(), cellId: cell.id, name: cell.quality!.name, description: cell.quality!.description, severity: cell.quality!.severity, sql: cell.sql })),
+          expiresAt: expiry,
+        },
+      };
+      const pipeline: Pipeline = {
+        id: pipelineId, name: `publish_${draft.name}`, displayName: `Publish ${displayName}`,
+        description: `Mock transformation pipeline for ${displayName}.`, type: 'Transformation', owner: dataset.owner,
+        schedule: draft.frequency === 'Manual' ? null : { enabled: true, cron: draft.cron, timezone: 'UTC', nextRun: new Date(now.getTime() + 60 * 60 * 1000) },
+        engine: 'DuckDB WASM', cluster: 'Browser-local workspace', inputDatasets: inputDatasetIds, outputDatasets: [datasetId],
+        tags: ['workspace', 'mock-schedule', marker], createdAt: now, lastRunStatus: 'Success', lastRunTime: now, avgDuration: Math.max(1, result.elapsedMs / 1000), totalRuns: 1,
+      };
+      const initialRun: PipelineRun = {
+        id: crypto.randomUUID(), runNumber: `RUN-PUB-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+        pipelineId, pipelineName: pipeline.name, type: 'Transformation', status: 'Success', startTime: now, endTime: now,
+        duration: Math.max(1, Math.round(result.elapsedMs / 1000)), recordsProcessed: result.rowCount, recordsFailed: 0, triggerType: 'Manual',
+        inputDatasets: inputDatasetIds, outputDatasets: [datasetId], parameters: { schedule: draft.frequency, source: 'Table Publishing' },
+        logs: [{ timestamp: now, level: 'INFO', message: `Published ${publishedTable} with ${result.rowCount.toLocaleString()} rows.` }, { timestamp: now, level: 'INFO', message: `${selectedQualityCells.length} quality checks evaluated.` }],
+      };
+      const bundle: EphemeralPublicationBundle = {
+        id: bundleId, dataset, pipeline, pipelineRuns: [initialRun],
+        qualityChecks: qualityEntries.map((check) => ({ ...check, datasetId, datasetName: displayName })),
+        lineage: [{ id: crypto.randomUUID(), type: 'Gold', name: displayName, timestamp: now, location: publishedTable, datasetIds: [datasetId], metadata: { pipelineId, sourceCellId: selectedSource.id, ephemeral: true } }],
+        costs: [{ id: crypto.randomUUID(), category: 'Query', subcategory: 'DuckDB WASM', entityType: 'Pipeline', entityId: pipelineId, amount: 0.04, currency: 'USD', date: now, description: `Mock query cost for publishing ${displayName}` }], expiresAt: expiry,
+      };
+      publishEphemeralBundle(bundle);
+      setPublishedDatasetId(datasetId);
+      await refreshTables();
+    } catch (error) {
+      setPublicationError(error instanceof Error ? error.message : 'The table could not be published.');
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   return (
     <div className="-m-4 sm:-m-6 h-screen min-h-[640px] overflow-hidden bg-[#f7f8fa] text-cream-900 flex flex-col">
@@ -291,16 +535,44 @@ export function DevelopmentWorkspace() {
           <section className="min-h-0 flex flex-1 flex-col overflow-y-auto bg-[#fbfcfd] p-3 sm:p-4 scrollbar-thin">
             <div className="mx-auto w-full max-w-6xl space-y-3">
               {activeNotebook.cells.map((cell, index) => <article key={cell.id} onClick={() => setActiveCellId(cell.id)} className={clsx('overflow-hidden rounded-lg border bg-white shadow-card transition-shadow', cell.id === activeCellId ? 'border-blue-400 shadow-[0_0_0_1px_rgba(59,130,246,0.12)]' : 'border-cream-200')}>
-                <div className="flex h-10 items-center justify-between border-b border-cream-100 bg-white px-3"><div className="flex items-center gap-2"><span className="font-mono text-[11px] text-cream-400">{index + 1}</span><span className="text-xs font-medium text-cream-600">SQL</span></div><button type="button" onClick={() => void runCell(cell.id)} disabled={status !== 'ready' || cell.running} className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">{cell.running ? <LoaderCircle className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}{cell.running ? 'Running' : 'Run'} <span className="hidden sm:inline text-blue-200">⌘↵</span></button></div>
-                <CodeMirror value={cell.sql} height="200px" extensions={[sql(), softSqlTheme, keymap.of([{ key: 'Mod-Enter', run: () => { void runCell(cell.id); return true; } }])]} onChange={(value) => updateCell(cell.id, { sql: value, result: undefined, error: undefined })} basicSetup={{ lineNumbers: true, foldGutter: false, highlightActiveLine: true, autocompletion: true }} />
+                <div className="flex h-10 items-center justify-between border-b border-cream-100 bg-white px-3"><div className="flex items-center gap-2"><span className="font-mono text-[11px] text-cream-400">{index + 1}</span><select aria-label={`Cell ${index + 1} type`} value={cell.kind} onChange={(event) => setCellKind(cell.id, event.target.value as Cell['kind'])} className={clsx('rounded border px-1.5 py-1 text-[11px] font-medium outline-none', cell.kind === 'quality' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-cream-200 bg-white text-cream-600')}><option value="query">Query</option><option value="quality">Quality check</option></select></div><button type="button" onClick={() => void runCell(cell.id)} disabled={status !== 'ready' || cell.running} className={clsx('inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-50', cell.kind === 'quality' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700')}>{cell.running ? <LoaderCircle className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}{cell.running ? 'Running' : cell.kind === 'quality' ? 'Run check' : 'Run'} <span className="hidden sm:inline text-white/70">⌘↵</span></button></div>
+                <CodeMirror value={cell.sql} height="200px" extensions={[sql(), softSqlTheme, keymap.of([{ key: 'Mod-Enter', run: () => { void runCell(cell.id); return true; } }])]} onChange={(value) => updateCell(cell.id, { sql: value, result: undefined, error: undefined, qualityExecution: undefined })} basicSetup={{ lineNumbers: true, foldGutter: false, highlightActiveLine: true, autocompletion: true }} />
+                {cell.kind === 'quality' && cell.quality && <div className="grid gap-2 border-t border-amber-100 bg-amber-50/40 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_120px]"><input value={cell.quality.name} onChange={(event) => updateQualityConfig(cell.id, { name: event.target.value })} placeholder="Check name" className="rounded border border-amber-200 bg-white px-2 py-1.5 text-xs text-cream-800 outline-none focus:border-amber-400" /><input value={cell.quality.description} onChange={(event) => updateQualityConfig(cell.id, { description: event.target.value })} placeholder="Describe the rule (optional)" className="rounded border border-amber-200 bg-white px-2 py-1.5 text-xs text-cream-800 outline-none focus:border-amber-400" /><select aria-label="Quality severity" value={cell.quality.severity} onChange={(event) => updateQualityConfig(cell.id, { severity: event.target.value as QualitySeverity })} className="rounded border border-amber-200 bg-white px-2 py-1.5 text-xs text-cream-700 outline-none focus:border-amber-400"><option value="Info">Info</option><option value="Warning">Warning</option><option value="Error">Error</option><option value="Critical">Critical</option></select><p className="sm:col-span-3 text-[11px] text-amber-800">Return violating rows from this query. Use <code className="rounded bg-amber-100 px-1">{'{{published_table}}'}</code> to test the table during publishing.</p></div>}
+                {cell.qualityExecution && cell.quality && <QualityExecutionCard execution={cell.qualityExecution} severity={cell.quality.severity} />}
                 {cell.error && <div className="border-t border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700 whitespace-pre-wrap">{cell.error}</div>}
               </article>)}
               <button type="button" onClick={() => addCell()} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-cream-600 hover:bg-cream-100"><Plus className="w-3.5 h-3.5" /> Add SQL cell</button>
             </div>
           </section>
-          <section className="h-[38%] min-h-[230px] flex-shrink-0 border-t border-cream-300 bg-white flex flex-col">
-            <div className="flex h-10 items-center border-b border-cream-200 px-3"><div className="flex h-full items-center border-b-2 border-blue-600 text-xs font-medium text-blue-700">Results {activeCell?.result ? `(${activeCell.result.rowCount.toLocaleString()})` : ''}</div><div className="ml-auto flex items-center gap-2">{activeCell?.result && <><span className="hidden sm:inline text-[11px] text-cream-500">{activeCell.result.elapsedMs} ms{activeCell.result.truncated ? ' · first 250 rows' : ''}</span><label className="hidden md:flex items-center gap-1.5 rounded border border-cream-200 px-2 py-1 text-cream-400"><Search className="w-3 h-3" /><input value={resultSearch} onChange={(event) => setResultSearch(event.target.value)} placeholder="Search results" className="w-28 bg-transparent text-[11px] text-cream-700 outline-none" /></label><button type="button" title="CSV export is planned" className="text-cream-400 hover:text-cream-700"><Download className="w-3.5 h-3.5" /></button></>}</div></div>
-            <div className="min-h-0 flex-1">{visibleResult ? <ResultGrid result={visibleResult} /> : <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-cream-400"><Table2 className="w-5 h-5" /><p className="text-xs">Run the active SQL cell to view results.</p></div>}</div>
+          <section className="h-[42%] min-h-[250px] flex-shrink-0 border-t border-cream-300 bg-white flex flex-col">
+            <div className="flex h-10 items-center border-b border-cream-200 px-3">
+              <div className="flex h-full items-center gap-5">
+                <button type="button" onClick={() => setBottomTab('results')} className={clsx('h-full border-b-2 text-xs font-medium', bottomTab === 'results' ? 'border-blue-600 text-blue-700' : 'border-transparent text-cream-500 hover:text-cream-800')}>Results {activeCell?.result ? `(${activeCell.result.rowCount.toLocaleString()})` : ''}</button>
+                <button type="button" onClick={() => setBottomTab('publishing')} className={clsx('h-full border-b-2 text-xs font-medium', bottomTab === 'publishing' ? 'border-blue-600 text-blue-700' : 'border-transparent text-cream-500 hover:text-cream-800')}>Table Publishing</button>
+              </div>
+              {bottomTab === 'results' && <div className="ml-auto flex items-center gap-2">{activeCell?.result && <><span className="hidden sm:inline text-[11px] text-cream-500">{activeCell.result.elapsedMs} ms{activeCell.result.truncated ? ' · first 250 rows' : ''}</span><label className="hidden md:flex items-center gap-1.5 rounded border border-cream-200 px-2 py-1 text-cream-400"><Search className="w-3 h-3" /><input value={resultSearch} onChange={(event) => setResultSearch(event.target.value)} placeholder="Search results" className="w-28 bg-transparent text-[11px] text-cream-700 outline-none" /></label><button type="button" title="CSV export is planned" className="text-cream-400 hover:text-cream-700"><Download className="w-3.5 h-3.5" /></button></>}</div>}
+            </div>
+            {bottomTab === 'results' ? <div className="min-h-0 flex-1">{visibleResult ? <ResultGrid result={visibleResult} /> : <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-cream-400"><Table2 className="w-5 h-5" /><p className="text-xs">Run the active SQL cell to view results.</p></div>}</div> : <div className="min-h-0 flex-1 overflow-y-auto bg-[#fbfcfd] p-3 scrollbar-thin sm:p-4">
+              <div className="mx-auto grid max-w-5xl gap-3 xl:grid-cols-[1.1fr_0.9fr]">
+                <div className="space-y-3 rounded-lg border border-cream-200 bg-white p-3">
+                  <div><h2 className="text-sm font-semibold text-cream-900">Publish a table</h2><p className="mt-0.5 text-xs text-cream-500">Create an ephemeral catalog dataset and mock pipeline from a notebook query.</p></div>
+                  <label className="block text-xs font-medium text-cream-700">Source query cell<select value={draft.sourceCellId} onChange={(event) => selectSourceCell(event.target.value)} className="mt-1.5 w-full rounded-md border border-cream-200 bg-white px-2.5 py-2 text-xs text-cream-800 outline-none focus:border-blue-400"><option value="">Select a SELECT or WITH cell</option>{sourceCells.map((cell) => <option key={cell.id} value={cell.id}>Cell {activeNotebook.cells.indexOf(cell) + 1} · {cell.result ? `${cell.result.rowCount.toLocaleString()} rows` : 'run to preview fields'}</option>)}</select></label>
+                  <div className="grid gap-2 sm:grid-cols-2"><label className="text-xs font-medium text-cream-700">Table name<input value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} className="mt-1.5 w-full rounded-md border border-cream-200 px-2.5 py-2 font-mono text-xs text-cream-800 outline-none focus:border-blue-400" /></label><label className="text-xs font-medium text-cream-700">Display name<input value={draft.displayName} onChange={(event) => setDraft((current) => ({ ...current, displayName: event.target.value }))} className="mt-1.5 w-full rounded-md border border-cream-200 px-2.5 py-2 text-xs text-cream-800 outline-none focus:border-blue-400" /></label></div>
+                  <label className="block text-xs font-medium text-cream-700">Description<textarea value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} rows={2} className="mt-1.5 w-full resize-none rounded-md border border-cream-200 px-2.5 py-2 text-xs text-cream-800 outline-none focus:border-blue-400" /></label>
+                  <div className="grid gap-2 sm:grid-cols-3"><label className="text-xs font-medium text-cream-700">Owner<input value={draft.owner} onChange={(event) => setDraft((current) => ({ ...current, owner: event.target.value }))} className="mt-1.5 w-full rounded-md border border-cream-200 px-2.5 py-2 text-xs text-cream-800 outline-none focus:border-blue-400" /></label><label className="text-xs font-medium text-cream-700">Tags<input value={draft.tags} onChange={(event) => setDraft((current) => ({ ...current, tags: event.target.value }))} className="mt-1.5 w-full rounded-md border border-cream-200 px-2.5 py-2 text-xs text-cream-800 outline-none focus:border-blue-400" /></label><label className="text-xs font-medium text-cream-700">Criticality<select value={draft.criticality} onChange={(event) => setDraft((current) => ({ ...current, criticality: event.target.value as Dataset['criticality'] }))} className="mt-1.5 w-full rounded-md border border-cream-200 bg-white px-2.5 py-2 text-xs text-cream-800 outline-none focus:border-blue-400"><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select></label></div>
+                  <label className="block text-xs font-medium text-cream-700">Transformation summary<textarea value={draft.transformations} onChange={(event) => setDraft((current) => ({ ...current, transformations: event.target.value }))} rows={2} className="mt-1.5 w-full resize-none rounded-md border border-cream-200 px-2.5 py-2 text-xs text-cream-800 outline-none focus:border-blue-400" /></label>
+                </div>
+                <div className="space-y-3 rounded-lg border border-cream-200 bg-white p-3">
+                  <div><h3 className="text-sm font-semibold text-cream-900">Operate and validate</h3><p className="mt-0.5 text-xs text-cream-500">The schedule and runs are intentionally mocked for this browser-local demo.</p></div>
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1"><label className="text-xs font-medium text-cream-700">Frequency<select value={draft.frequency} onChange={(event) => { const frequency = event.target.value; setDraft((current) => ({ ...current, frequency, cron: cronForFrequency(frequency) })); }} className="mt-1.5 w-full rounded-md border border-cream-200 bg-white px-2.5 py-2 text-xs text-cream-800 outline-none focus:border-blue-400"><option>Manual</option><option>Hourly</option><option>Daily</option><option>Weekly</option><option>Custom</option></select></label>{draft.frequency === 'Custom' && <label className="text-xs font-medium text-cream-700">Cron expression<input value={draft.cron} onChange={(event) => setDraft((current) => ({ ...current, cron: event.target.value }))} placeholder="0 6 * * *" className="mt-1.5 w-full rounded-md border border-cream-200 px-2.5 py-2 font-mono text-xs text-cream-800 outline-none focus:border-blue-400" /></label>}</div>
+                  <div className="rounded-md border border-amber-100 bg-amber-50/60 p-2.5"><div className="flex items-center justify-between gap-2"><div><p className="text-xs font-semibold text-amber-900">Quality checks</p><p className="text-[11px] text-amber-800">Marked cells are included in the mock pipeline.</p></div><span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">{selectedQualityCells.length}</span></div><div className="mt-2 space-y-1.5">{qualityCells.length ? qualityCells.map((cell) => <label key={cell.id} className="flex items-center gap-2 rounded bg-white/70 px-2 py-1.5 text-xs text-cream-700"><input type="checkbox" checked={draft.includedQualityCellIds.includes(cell.id)} onChange={(event) => setDraft((current) => ({ ...current, includedQualityCellIds: event.target.checked ? [...current.includedQualityCellIds, cell.id] : current.includedQualityCellIds.filter((id) => id !== cell.id) }))} className="accent-amber-600" /><span className="min-w-0 flex-1 truncate">{cell.quality?.name || `Quality check ${activeNotebook.cells.indexOf(cell) + 1}`}</span><span className="text-[10px] text-cream-400">{cell.quality?.severity}</span></label>) : <p className="py-1 text-[11px] text-amber-800">Mark a notebook cell as a Quality check to include it here.</p>}</div></div>
+                  <div className="rounded-md border border-cream-200 bg-cream-50 p-2.5"><p className="text-xs font-semibold text-cream-800">Column descriptions</p>{selectedSource?.result?.columns.length ? <div className="mt-2 space-y-1.5">{selectedSource.result.columns.map((column) => <label key={column.name} className="grid grid-cols-[minmax(90px,0.7fr)_minmax(0,1.3fr)] items-center gap-2 text-[11px]"><span className="truncate font-mono text-cream-600">{column.name}</span><input value={draft.fieldDescriptions[column.name] ?? ''} onChange={(event) => setDraft((current) => ({ ...current, fieldDescriptions: { ...current.fieldDescriptions, [column.name]: event.target.value } }))} placeholder="Describe this column" className="rounded border border-cream-200 bg-white px-2 py-1.5 text-xs text-cream-800 outline-none focus:border-blue-400" /></label>)}</div> : <p className="mt-1 text-[11px] text-cream-500">Run the source query to infer columns and add descriptions.</p>}</div>
+                  {publicationError && <p className="rounded-md bg-red-50 px-2.5 py-2 text-xs text-red-700">{publicationError}</p>}
+                  {publishedDatasetId ? <div className="flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-2"><span className="text-xs text-emerald-800">Table published to the catalog.</span><button type="button" onClick={() => navigate(`/datasets/${publishedDatasetId}`)} className="text-xs font-medium text-emerald-800 hover:underline">Open dataset</button></div> : <button type="button" onClick={() => void publishTable()} disabled={publishing || status !== 'ready'} className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">{publishing ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Database className="h-3.5 w-3.5" />}{publishing ? 'Publishing table…' : 'Publish table'}</button>}
+                  <p className="text-[11px] text-cream-500">Published datasets and their mock pipeline bundle expire with this workspace: {formatExpiry(expiresAt)}.</p>
+                </div>
+              </div>
+            </div>}
           </section>
         </main>
 
