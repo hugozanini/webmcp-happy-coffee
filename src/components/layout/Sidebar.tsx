@@ -52,7 +52,7 @@ export function Sidebar() {
         collapsed ? 'w-16' : 'w-16 lg:w-60',
       )}
     >
-      <div className={clsx('relative py-5 border-b border-brand-800', collapsed ? 'px-3' : 'px-3 lg:px-4')}>
+      <div className={clsx('py-5 border-b border-brand-800', collapsed ? 'px-3' : 'px-3 lg:px-4')}>
         <Link
           to="/"
           title="Happy Coffee home"
@@ -65,14 +65,6 @@ export function Sidebar() {
             <p className="text-xs text-cream-500 leading-tight">Data Developer Portal</p>
           </div>
         </Link>
-        <button
-          type="button"
-          onClick={() => setCollapsed((value) => !value)}
-          aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
-          className="hidden lg:flex absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 items-center justify-center rounded-full border border-cream-700 bg-brand-900 text-cream-400 shadow-sm hover:text-white hover:border-cream-500 transition-colors"
-        >
-          {collapsed ? <PanelLeftOpen className="w-3.5 h-3.5" /> : <PanelLeftClose className="w-3.5 h-3.5" />}
-        </button>
       </div>
 
       <nav className={clsx('flex-1 py-4 space-y-0.5 overflow-y-auto scrollbar-thin', collapsed ? 'px-2' : 'px-2 lg:px-3')}>
@@ -117,6 +109,22 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      <div className={clsx('hidden lg:block border-t border-brand-800 p-2', collapsed ? 'px-2' : 'px-3')}>
+        <button
+          type="button"
+          onClick={() => setCollapsed((value) => !value)}
+          aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+          title={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+          className={clsx(
+            'w-full flex items-center rounded-lg px-3 py-2 text-xs text-cream-500 hover:bg-brand-900 hover:text-cream-200 transition-colors',
+            collapsed ? 'justify-center' : 'justify-start gap-2'
+          )}
+        >
+          {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+          <span className={clsx(collapsed && 'hidden')}>{collapsed ? 'Expand navigation' : 'Collapse sidebar'}</span>
+        </button>
+      </div>
     </aside>
   );
 }
