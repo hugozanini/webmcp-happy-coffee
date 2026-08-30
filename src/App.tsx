@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Sidebar } from './components/layout/Sidebar';
 import { ContentShell } from './components/layout/ContentShell';
@@ -9,6 +10,10 @@ import { PipelineDetail } from './components/catalog/PipelineDetail';
 import { Costs } from './components/catalog/Costs';
 import { SearchResults } from './components/catalog/SearchResults';
 import { WebMCPIntegration } from './components/mcp/WebMCPIntegration';
+
+const DevelopmentWorkspace = lazy(() =>
+  import('./components/develop/DevelopmentWorkspace').then(({ DevelopmentWorkspace: Workspace }) => ({ default: Workspace })),
+);
 
 function App() {
   return (
@@ -25,6 +30,7 @@ function App() {
             <Route path="/pipelines" element={<Pipelines />} />
             <Route path="/pipelines/:id" element={<PipelineDetail />} />
             <Route path="/costs" element={<Costs />} />
+            <Route path="/develop" element={<Suspense fallback={<div className="p-6 text-sm text-cream-500">Loading development workspace…</div>}><DevelopmentWorkspace /></Suspense>} />
           </Routes>
         </ContentShell>
       </div>

@@ -44,6 +44,148 @@ export function WebMCPIntegration() {
     const registration = new AbortController();
     const tools: ToolDefinition[] = [
         {
+          name: 'open_development_workspace',
+          description:
+            'Open the Happy Coffee DuckDB development workspace and list the generated catalog tables available for SQL development. ' +
+            'Use this first when a user wants to explore, analyze, or build data in the portal.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: (args: Record<string, unknown>) =>
+            executeToolRef.current('open_development_workspace', args),
+        },
+        {
+          name: 'run_duckdb_sql',
+          readOnlyHint: false,
+          description:
+            'Run SQL with DuckDB in the user\'s browser-local Happy Coffee development workspace. ' +
+            'Use happy_coffee.<table_name> for generated catalog data and workspace.<table_name> for temporary tables. ' +
+            'Results appear in the workspace UI. DDL and DML are local to the browser and expire after 90 minutes.',
+          inputSchema: {
+            type: 'object',
+            properties: { sql: { type: 'string', description: 'A complete DuckDB SQL statement.' } },
+            required: ['sql'],
+          },
+          execute: (args: Record<string, unknown>) =>
+            executeToolRef.current('run_duckdb_sql', args),
+        },
+        {
+          name: 'create_workspace_table',
+          readOnlyHint: false,
+          description:
+            'Create or replace a named temporary table in the browser-local workspace schema from a SELECT or WITH query. ' +
+            'Use this to develop derived data the user can inspect in the Happy Coffee workspace. Temporary tables expire after 90 minutes.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Simple table name using letters, numbers, and underscores.' },
+              selectSql: { type: 'string', description: 'SELECT or WITH query defining the table.' },
+            },
+            required: ['name', 'selectSql'],
+          },
+          execute: (args: Record<string, unknown>) =>
+            executeToolRef.current('create_workspace_table', args),
+        },
+        {
+          name: 'create_development_sql_cell',
+          readOnlyHint: false,
+          description:
+            'Add a visible SQL cell to the Happy Coffee development notebook. Use kind="quality" for a quality-check query; ' +
+            'quality checks should return the rows that violate a rule, and can use {{published_table}} when they will test a published table.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              sql: { type: 'string', description: 'The SQL statement to place in the notebook cell.' },
+              notebookId: { type: 'string', description: 'Optional notebook ID from inspect_development_workspace. Defaults to the active notebook.' },
+              kind: { type: 'string', enum: ['query', 'quality'], description: 'Whether this is a query or a quality-check cell.' },
+              name: { type: 'string', description: 'Required for quality checks; a clear check name.' },
+              description: { type: 'string', description: 'Optional explanation of what the quality check validates.' },
+              severity: { type: 'string', enum: ['Info', 'Warning', 'Error', 'Critical'] },
+            },
+            required: ['sql'],
+          },
+          execute: (args: Record<string, unknown>) =>
+            executeToolRef.current('create_development_sql_cell', args),
+        },
+        {
+          name: 'open_table_publishing',
+          readOnlyHint: false,
+          description:
+            'Open the Table Publishing tab in the Happy Coffee development workspace. ' +
+            'Use it after creating a query cell and any optional quality-check cells so the user can review metadata, schedule, and publish the mock data product.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: (args: Record<string, unknown>) =>
+            executeToolRef.current('open_table_publishing', args),
+        },
+        {
+          name: 'inspect_development_workspace',
+          description: 'Inspect the live Develop workspace. Returns notebook IDs, cell IDs, SQL, quality-check configuration, results, tables, and the current publication draft. Call this before editing or preparing a publication.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('inspect_development_workspace', args),
+        },
+        {
+          name: 'create_development_notebook',
+          readOnlyHint: false,
+          description: 'Create and select a new notebook in the live Develop workspace.',
+          inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'A short notebook name.' } } },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('create_development_notebook', args),
+        },
+        {
+          name: 'select_development_notebook',
+          readOnlyHint: false,
+          description: 'Select a development notebook by ID from inspect_development_workspace.',
+          inputSchema: { type: 'object', properties: { notebookId: { type: 'string' } }, required: ['notebookId'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('select_development_notebook', args),
+        },
+        {
+          name: 'close_development_notebook',
+          readOnlyHint: false,
+          description: 'Close a development notebook by ID. The only remaining notebook cannot be closed.',
+          inputSchema: { type: 'object', properties: { notebookId: { type: 'string' } }, required: ['notebookId'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('close_development_notebook', args),
+        },
+        {
+          name: 'update_development_sql_cell',
+          readOnlyHint: false,
+          description: 'Update a notebook cell SQL statement, convert it between query and quality-check modes, or configure its quality-check metadata. Use cell IDs from inspect_development_workspace.',
+          inputSchema: { type: 'object', properties: { cellId: { type: 'string' }, sql: { type: 'string' }, kind: { type: 'string', enum: ['query', 'quality'] }, name: { type: 'string' }, description: { type: 'string' }, severity: { type: 'string', enum: ['Info', 'Warning', 'Error', 'Critical'] } }, required: ['cellId'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('update_development_sql_cell', args),
+        },
+        {
+          name: 'delete_development_sql_cell',
+          readOnlyHint: false,
+          description: 'Delete a notebook cell by ID. Use this to remove superseded development or quality-check logic.',
+          inputSchema: { type: 'object', properties: { cellId: { type: 'string' } }, required: ['cellId'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('delete_development_sql_cell', args),
+        },
+        {
+          name: 'run_development_sql_cell',
+          readOnlyHint: false,
+          description: 'Run an existing notebook cell by ID. The result and any quality-check execution card are updated visibly in the Develop workspace.',
+          inputSchema: { type: 'object', properties: { cellId: { type: 'string' } }, required: ['cellId'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('run_development_sql_cell', args),
+        },
+        {
+          name: 'prepare_table_publication',
+          readOnlyHint: false,
+          description: 'Fill and open Table Publishing from existing query and quality-check cells. This tool intentionally cannot publish: the user must review the visible form and click Publish table themselves.',
+          inputSchema: { type: 'object', properties: { sourceCellId: { type: 'string' }, name: { type: 'string' }, displayName: { type: 'string' }, description: { type: 'string' }, owner: { type: 'string' }, tags: { type: 'string' }, criticality: { type: 'string', enum: ['Low', 'Medium', 'High', 'Critical'] }, frequency: { type: 'string', enum: ['Manual', 'Hourly', 'Daily', 'Weekly', 'Custom'] }, cron: { type: 'string' }, transformations: { type: 'string' }, qualityCellIds: { type: 'array', items: { type: 'string' } }, fieldDescriptions: { type: 'object', additionalProperties: { type: 'string' } } } },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('prepare_table_publication', args),
+        },
+        {
+          name: 'reset_development_workspace',
+          readOnlyHint: false,
+          description: 'Reset the browser-local DuckDB workspace, clearing temporary tables and every ephemeral published data-product bundle.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('reset_development_workspace', args),
+        },
+        {
+          name: 'inspect_development_tables',
+          description:
+            'List the generated Happy Coffee catalog tables and temporary workspace tables available in the DuckDB development workspace.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: (args: Record<string, unknown>) =>
+            executeToolRef.current('inspect_development_tables', args),
+        },
+        {
           name: 'view_home_dashboard',
           description:
             'Navigate to the home dashboard and view top assets. Optionally filter by asset type.',

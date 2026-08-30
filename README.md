@@ -8,6 +8,30 @@ Happy Coffee uses deterministic, realistic mock data for datasets, pipelines, da
 
 - A React data developer portal with realistic mock assets and operational metrics.
 - WebMCP tools for portal search, dataset inspection, pipeline inspection, logs, and cost analysis.
+- A browser-local DuckDB development workspace with a SQL notebook, result grid, and data explorer.
+- WebMCP tools that let an AI agent open the workspace, inspect available tables, run DuckDB SQL, and create temporary derived tables while the user follows along in the UI.
+
+## DuckDB development workspace
+
+Open **Develop** from the left navigation to query the generated mock data with DuckDB-Wasm. The workspace seeds every generated portal dataset into the `happy_coffee` schema:
+
+```sql
+SELECT variety, SUM(weight_kg) AS inventory_kg
+FROM happy_coffee.coffee_inventory
+GROUP BY variety
+ORDER BY inventory_kg DESC;
+```
+
+Create derived tables in the `workspace` schema:
+
+```sql
+CREATE TABLE workspace.inventory_by_origin AS
+SELECT origin, SUM(weight_kg) AS inventory_kg
+FROM happy_coffee.coffee_inventory
+GROUP BY origin;
+```
+
+DuckDB runs in a dedicated browser worker. Catalog seed data and temporary tables stay on the user’s device; they are never sent to a server. Workspace state resets automatically after 90 minutes and is also cleared by **Reset workspace** or a page refresh. This makes Cloudflare hosting straightforward: no database or server-side execution environment is required for the interactive SQL demo.
 
 ## Local development
 
@@ -26,8 +50,6 @@ npm run test:run
 npm run build
 ```
 
-## Planned hosted-demo capabilities
+## Hosted-demo deployment
 
-The next implementation phase adds a Cloudflare Worker and D1 database for short-lived SQL draft storage. Drafts will be storage-only, size-limited, and automatically expired within two hours.
-
-Deployment will use Cloudflare Workers Builds: pull requests receive preview builds, while merges to `main` automatically deploy production.
+The application loads DuckDB-Wasm’s official browser-selected bundle from jsDelivr at runtime. This avoids Cloudflare Pages’ 25 MiB per-static-asset limit while keeping query execution in the browser. For the hosted demo, deploy it as a Cloudflare Pages site: pull requests receive preview builds, and merges to `main` automatically deploy the production site. Cross-origin isolation is optional; without it DuckDB-Wasm runs safely in a single worker thread, which is sufficient for this mock-data demo.
