@@ -104,11 +104,11 @@ export function Home() {
 
   return (
     <div>
-      <div className="bg-gradient-to-br from-brand-950 via-brand-900 to-brand-800 rounded-2xl p-6 mb-8 text-white">
+      <div className="bg-gradient-to-br from-brand-950 via-brand-900 to-brand-800 rounded-2xl p-5 sm:p-6 mb-6 sm:mb-8 text-white">
         <div className="max-w-2xl mx-auto text-center">
-          <div className="inline-flex items-center gap-3 mb-4" style={{ '--logo-inner': '#1a1a1a' } as React.CSSProperties}>
-            <Logo size={56} className="flex-shrink-0" />
-            <h1 className="text-2xl font-semibold leading-none">Happy Coffee Data Developer Portal</h1>
+          <div className="flex flex-col sm:inline-flex sm:flex-row items-center gap-2 sm:gap-3 mb-4" style={{ '--logo-inner': '#1a1a1a' } as React.CSSProperties}>
+            <Logo size={48} className="flex-shrink-0" />
+            <h1 className="text-xl sm:text-2xl font-semibold leading-tight">Happy Coffee Data Developer Portal</h1>
           </div>
           <SearchInput
             value={search}
@@ -121,9 +121,9 @@ export function Home() {
         </div>
       </div>
 
-      <div className="flex gap-6">
+      <div className="flex flex-col xl:flex-row gap-6">
         <div className="flex-1 min-w-0">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-3 mb-6">
             <StatCard icon={Database} label="Total Datasets" value={datasets.length} />
             <StatCard icon={ShieldCheck} label="Avg Quality" value={avgQuality} detail="Score 0-100" />
             <StatCard icon={Server} label="Connected Sources" value={connectedSources} />
@@ -131,8 +131,8 @@ export function Home() {
           </div>
 
           <div className="bg-white border border-cream-200 rounded-xl shadow-card">
-            <div className="px-4 pt-4 pb-0 border-b border-cream-100">
-              <div className="flex gap-1">
+            <div className="px-4 pt-4 pb-0 border-b border-cream-100 overflow-x-auto scrollbar-thin">
+              <div className="flex gap-1 min-w-max">
                 {tabs.map((tab) => (
                   <button
                     key={tab.key}
@@ -163,14 +163,14 @@ export function Home() {
                   <button
                     key={row.id}
                     onClick={() => navigate(row.link)}
-                    className="flex items-center gap-3 w-full px-4 py-3 text-left hover:bg-cream-50 transition-colors"
+                    className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1 w-full px-4 py-3 text-left hover:bg-cream-50 transition-colors"
                   >
                     <Icon className="w-4 h-4 text-cream-400 flex-shrink-0" />
-                    <span className="font-medium text-cream-900 text-sm">{row.name}</span>
+                    <span className="font-medium text-cream-900 text-sm max-w-full">{row.name}</span>
                     {row.score && row.score >= 90 && (
                       <CheckCircle2 className="w-3.5 h-3.5 text-accent-500 flex-shrink-0" />
                     )}
-                    <span className="text-xs text-cream-500 truncate">{row.meta}</span>
+                    <span className="basis-full sm:basis-auto sm:flex-1 text-xs text-cream-500 truncate">{row.meta}</span>
                   </button>
                 );
               })}
@@ -181,7 +181,7 @@ export function Home() {
           </div>
         </div>
 
-        <div className="w-72 flex-shrink-0 space-y-6 hidden lg:block">
+        <div className="w-full xl:w-80 flex-shrink-0 space-y-6">
           <div className="bg-white border border-cream-200 rounded-xl shadow-card p-4">
             <h3 className="text-sm font-semibold text-cream-800 mb-3">Recent Quality Checks</h3>
             <div className="space-y-3">

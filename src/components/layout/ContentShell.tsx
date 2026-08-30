@@ -6,8 +6,8 @@ interface ContentShellProps {
 
 export function ContentShell({ children }: ContentShellProps) {
   return (
-    <div className="flex-1 h-screen overflow-y-auto scrollbar-thin p-6">
+    <main className="flex-1 min-w-0 h-screen overflow-y-auto scrollbar-thin p-4 sm:p-6">
       {children}
-    </div>
+    </main>
   );
 }
