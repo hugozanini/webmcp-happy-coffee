@@ -4,9 +4,9 @@ import { sql } from '@codemirror/lang-sql';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { keymap } from '@codemirror/view';
 import {
-  Bot, CheckCircle2, ChevronDown, Clock3, Code2, Database, Download,
-  LoaderCircle, Play, Plus, RefreshCcw, RotateCcw, Search, Sparkles,
-  Table2, X, XCircle,
+  CheckCircle2, ChevronDown, Clock3, Code2, Database, Download,
+  LoaderCircle, PanelLeftClose, PanelLeftOpen, Play, Plus, RefreshCcw,
+  RotateCcw, Search, Table2, X, XCircle,
 } from 'lucide-react';
 import { useCatalogData } from '../../hooks/useCatalogData';
 import {
@@ -17,7 +17,6 @@ import clsx from 'clsx';
 
 type Cell = { id: string; sql: string; result?: QueryResult; error?: string; running?: boolean };
 type Notebook = { id: string; name: string; cells: Cell[] };
-type AgentActivity = { id: string; title: string; detail: string; timestamp: Date };
 
 const EXAMPLE_SQL = `SELECT
   variety,
@@ -96,12 +95,12 @@ export function DevelopmentWorkspace() {
   const [activeCellId, setActiveCellId] = useState(() => notebooks[0].cells[0].id);
   const [tables, setTables] = useState<WorkspaceTable[]>([]);
   const [explorerQuery, setExplorerQuery] = useState('');
+  const [explorerCollapsed, setExplorerCollapsed] = useState(false);
   const [catalogExpanded, setCatalogExpanded] = useState(true);
   const [workspaceExpanded, setWorkspaceExpanded] = useState(true);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [statusMessage, setStatusMessage] = useState('Preparing your local DuckDB session…');
   const [expiresAt, setExpiresAt] = useState<Date | null>(null);
-  const [agentActivities, setAgentActivities] = useState<AgentActivity[]>([]);
   const [resultSearch, setResultSearch] = useState('');
   useDocumentTitle('Develop with DuckDB');
 
@@ -143,17 +142,8 @@ export function DevelopmentWorkspace() {
   }, [datasets]);
 
   useEffect(() => {
-    const handleWorkspaceChange = (event: Event) => {
+    const handleWorkspaceChange = () => {
       void refreshTables();
-      const detail = (event as CustomEvent<{ source?: string; sql?: string }>).detail;
-      if (detail?.source !== 'agent') return;
-      const compactSql = (detail.sql ?? 'Updated the development workspace').replace(/\s+/g, ' ').trim();
-      setAgentActivities((current) => [{
-        id: `${Date.now()}-${compactSql}`,
-        title: /^create/i.test(compactSql) ? 'Created a workspace table' : 'Ran DuckDB SQL',
-        detail: compactSql,
-        timestamp: new Date(),
-      }, ...current].slice(0, 4));
     };
     window.addEventListener(WORKSPACE_CHANGED_EVENT, handleWorkspaceChange);
     return () => window.removeEventListener(WORKSPACE_CHANGED_EVENT, handleWorkspaceChange);
@@ -262,18 +252,25 @@ export function DevelopmentWorkspace() {
       </header>
 
       <div className="min-h-0 flex flex-1">
-        <aside className="hidden lg:flex w-64 flex-shrink-0 flex-col border-r border-cream-200 bg-white">
-          <div className="border-b border-cream-100 p-3">
-            <div className="mb-2 flex items-center justify-between"><h2 className="text-xs font-semibold text-cream-700">Catalog</h2><button type="button" onClick={() => void refreshTables()} title="Refresh tables" className="text-cream-500 hover:text-cream-800"><RefreshCcw className="w-3.5 h-3.5" /></button></div>
-            <label className="flex items-center gap-2 rounded-md border border-cream-200 bg-cream-50 px-2 py-1.5 text-cream-400 focus-within:border-brand-400 focus-within:bg-white"><Search className="w-3.5 h-3.5" /><input value={explorerQuery} onChange={(event) => setExplorerQuery(event.target.value)} placeholder="Filter tables" className="w-full bg-transparent text-xs text-cream-700 outline-none placeholder:text-cream-400" /></label>
-          </div>
-          <div className="flex-1 overflow-y-auto p-2 text-xs scrollbar-thin">
-            <button type="button" onClick={() => setCatalogExpanded((value) => !value)} className="flex w-full items-center gap-1.5 rounded px-2 py-2 text-left font-medium text-cream-700 hover:bg-cream-50"><ChevronDown className={clsx('w-3.5 h-3.5 transition-transform', !catalogExpanded && '-rotate-90')} /><Database className="w-3.5 h-3.5 text-brand-600" /> happy_coffee <span className="ml-auto text-[10px] text-cream-400">{catalogTables.length}</span></button>
-            {catalogExpanded && <div className="mb-2 ml-2 border-l border-cream-200 py-1">{catalogTables.map((table) => <button key={`${table.schema}.${table.name}`} type="button" onClick={() => addCell(`SELECT *\nFROM ${table.schema}.${table.name}\nLIMIT 25;`)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-cream-600 hover:bg-blue-50 hover:text-blue-800"><Table2 className="w-3.5 h-3.5 text-cream-400" /><span className="truncate">{table.name}</span></button>)}</div>}
-            <button type="button" onClick={() => setWorkspaceExpanded((value) => !value)} className="flex w-full items-center gap-1.5 rounded px-2 py-2 text-left font-medium text-cream-700 hover:bg-cream-50"><ChevronDown className={clsx('w-3.5 h-3.5 transition-transform', !workspaceExpanded && '-rotate-90')} /><Database className="w-3.5 h-3.5 text-accent-600" /> workspace <span className="ml-auto text-[10px] text-cream-400">{workingTables.length}</span></button>
-            {workspaceExpanded && <div className="ml-2 border-l border-cream-200 py-1">{workingTables.length ? workingTables.map((table) => <button key={`${table.schema}.${table.name}`} type="button" onClick={() => addCell(`SELECT *\nFROM ${table.schema}.${table.name}\nLIMIT 25;`)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-cream-600 hover:bg-emerald-50 hover:text-emerald-800"><Table2 className="w-3.5 h-3.5 text-accent-600" /><span className="truncate">{table.name}</span></button>) : <p className="px-3 py-1.5 text-[11px] text-cream-400">No temporary tables</p>}</div>}
-          </div>
-          <div className="border-t border-cream-200 px-3 py-2 text-[11px] text-cream-500"><span className="inline-flex items-center gap-1"><Clock3 className="w-3 h-3" /> {formatExpiry(expiresAt)}</span></div>
+        <aside className={clsx('hidden lg:flex flex-shrink-0 flex-col border-r border-cream-200 bg-white transition-[width] duration-200', explorerCollapsed ? 'w-12' : 'w-64')}>
+          {explorerCollapsed ? (
+            <div className="flex flex-col items-center gap-3 pt-3">
+              <button type="button" onClick={() => setExplorerCollapsed(false)} aria-label="Expand catalog" title="Expand catalog" className="rounded-md p-2 text-cream-500 hover:bg-cream-100 hover:text-cream-800"><PanelLeftOpen className="w-4 h-4" /></button>
+              <Database className="w-4 h-4 text-brand-600" />
+            </div>
+          ) : <>
+            <div className="border-b border-cream-100 p-3">
+              <div className="mb-2 flex items-center justify-between"><h2 className="text-xs font-semibold text-cream-700">Catalog</h2><div className="flex items-center gap-2"><button type="button" onClick={() => void refreshTables()} title="Refresh tables" className="text-cream-500 hover:text-cream-800"><RefreshCcw className="w-3.5 h-3.5" /></button><button type="button" onClick={() => setExplorerCollapsed(true)} aria-label="Collapse catalog" title="Collapse catalog" className="text-cream-500 hover:text-cream-800"><PanelLeftClose className="w-3.5 h-3.5" /></button></div></div>
+              <label className="flex items-center gap-2 rounded-md border border-cream-200 bg-cream-50 px-2 py-1.5 text-cream-400 focus-within:border-brand-400 focus-within:bg-white"><Search className="w-3.5 h-3.5" /><input value={explorerQuery} onChange={(event) => setExplorerQuery(event.target.value)} placeholder="Filter tables" className="w-full bg-transparent text-xs text-cream-700 outline-none placeholder:text-cream-400" /></label>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 text-xs scrollbar-thin">
+              <button type="button" onClick={() => setCatalogExpanded((value) => !value)} className="flex w-full items-center gap-1.5 rounded px-2 py-2 text-left font-medium text-cream-700 hover:bg-cream-50"><ChevronDown className={clsx('w-3.5 h-3.5 transition-transform', !catalogExpanded && '-rotate-90')} /><Database className="w-3.5 h-3.5 text-brand-600" /> happy_coffee <span className="ml-auto text-[10px] text-cream-400">{catalogTables.length}</span></button>
+              {catalogExpanded && <div className="mb-2 ml-2 border-l border-cream-200 py-1">{catalogTables.map((table) => <button key={`${table.schema}.${table.name}`} type="button" onClick={() => addCell(`SELECT *\nFROM ${table.schema}.${table.name}\nLIMIT 25;`)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-cream-600 hover:bg-blue-50 hover:text-blue-800"><Table2 className="w-3.5 h-3.5 text-cream-400" /><span className="truncate">{table.name}</span></button>)}</div>}
+              <button type="button" onClick={() => setWorkspaceExpanded((value) => !value)} className="flex w-full items-center gap-1.5 rounded px-2 py-2 text-left font-medium text-cream-700 hover:bg-cream-50"><ChevronDown className={clsx('w-3.5 h-3.5 transition-transform', !workspaceExpanded && '-rotate-90')} /><Database className="w-3.5 h-3.5 text-accent-600" /> workspace <span className="ml-auto text-[10px] text-cream-400">{workingTables.length}</span></button>
+              {workspaceExpanded && <div className="ml-2 border-l border-cream-200 py-1">{workingTables.length ? workingTables.map((table) => <button key={`${table.schema}.${table.name}`} type="button" onClick={() => addCell(`SELECT *\nFROM ${table.schema}.${table.name}\nLIMIT 25;`)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-cream-600 hover:bg-emerald-50 hover:text-emerald-800"><Table2 className="w-3.5 h-3.5 text-accent-600" /><span className="truncate">{table.name}</span></button>) : <p className="px-3 py-1.5 text-[11px] text-cream-400">No temporary tables</p>}</div>}
+            </div>
+            <div className="border-t border-cream-200 px-3 py-2 text-[11px] text-cream-500"><span className="inline-flex items-center gap-1"><Clock3 className="w-3 h-3" /> {formatExpiry(expiresAt)}</span></div>
+          </>}
         </aside>
 
         <main className="min-w-0 flex flex-1 flex-col bg-white">
@@ -294,16 +291,11 @@ export function DevelopmentWorkspace() {
             </div>
           </section>
           <section className="h-[38%] min-h-[230px] flex-shrink-0 border-t border-cream-300 bg-white flex flex-col">
-            <div className="flex h-10 items-center border-b border-cream-200 px-3 gap-4"><div className="flex h-full items-center border-b-2 border-blue-600 text-xs font-medium text-blue-700">Results {activeCell?.result ? `(${activeCell.result.rowCount.toLocaleString()})` : ''}</div><button type="button" className="text-xs text-cream-500 hover:text-cream-800">Messages</button><button type="button" className="text-xs text-cream-400">Query plan</button><div className="ml-auto flex items-center gap-2">{activeCell?.result && <><span className="hidden sm:inline text-[11px] text-cream-500">{activeCell.result.elapsedMs} ms{activeCell.result.truncated ? ' · first 250 rows' : ''}</span><label className="hidden md:flex items-center gap-1.5 rounded border border-cream-200 px-2 py-1 text-cream-400"><Search className="w-3 h-3" /><input value={resultSearch} onChange={(event) => setResultSearch(event.target.value)} placeholder="Search results" className="w-28 bg-transparent text-[11px] text-cream-700 outline-none" /></label><button type="button" title="CSV export is planned" className="text-cream-400 hover:text-cream-700"><Download className="w-3.5 h-3.5" /></button></>}</div></div>
+            <div className="flex h-10 items-center border-b border-cream-200 px-3"><div className="flex h-full items-center border-b-2 border-blue-600 text-xs font-medium text-blue-700">Results {activeCell?.result ? `(${activeCell.result.rowCount.toLocaleString()})` : ''}</div><div className="ml-auto flex items-center gap-2">{activeCell?.result && <><span className="hidden sm:inline text-[11px] text-cream-500">{activeCell.result.elapsedMs} ms{activeCell.result.truncated ? ' · first 250 rows' : ''}</span><label className="hidden md:flex items-center gap-1.5 rounded border border-cream-200 px-2 py-1 text-cream-400"><Search className="w-3 h-3" /><input value={resultSearch} onChange={(event) => setResultSearch(event.target.value)} placeholder="Search results" className="w-28 bg-transparent text-[11px] text-cream-700 outline-none" /></label><button type="button" title="CSV export is planned" className="text-cream-400 hover:text-cream-700"><Download className="w-3.5 h-3.5" /></button></>}</div></div>
             <div className="min-h-0 flex-1">{visibleResult ? <ResultGrid result={visibleResult} /> : <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-cream-400"><Table2 className="w-5 h-5" /><p className="text-xs">Run the active SQL cell to view results.</p></div>}</div>
           </section>
         </main>
 
-        <aside className="hidden xl:flex w-56 flex-shrink-0 flex-col border-l border-cream-200 bg-white">
-          <div className="border-b border-cream-100 p-4"><div className="flex items-center gap-2 text-xs font-semibold text-cream-700"><Sparkles className="w-3.5 h-3.5 text-blue-600" /> Agent activity</div><p className="mt-1 text-[11px] leading-4 text-cream-500">Agent actions appear here as they update your browser-local workspace.</p></div>
-          <div className="flex-1 space-y-3 overflow-y-auto p-3 scrollbar-thin">{agentActivities.length ? agentActivities.map((activity) => <div key={activity.id} className="rounded-lg border border-blue-100 bg-blue-50/40 p-3"><p className="flex items-center gap-1.5 text-xs font-medium text-blue-900"><Bot className="w-3.5 h-3.5" /> {activity.title}</p><p className="mt-1.5 font-mono text-[10px] leading-4 text-blue-700 line-clamp-3">{activity.detail}</p><p className="mt-2 text-[10px] text-blue-500">Just now</p></div>) : <div className="rounded-lg border border-dashed border-cream-200 p-3 text-[11px] leading-4 text-cream-500">Ask an AI agent to explore catalog data or create a workspace table. Its actions will be visible here.</div>}</div>
-          <div className="border-t border-cream-200 p-3 space-y-2"><button type="button" onClick={() => addCell('SHOW TABLES;')} className="w-full rounded-md border border-cream-200 px-2.5 py-2 text-left text-xs text-cream-600 hover:bg-cream-50">List available tables</button><button type="button" onClick={() => addCell(`CREATE TABLE workspace.inventory_by_origin AS\nSELECT origin, SUM(weight_kg) AS inventory_kg\nFROM happy_coffee.coffee_inventory\nGROUP BY origin;`)} className="w-full rounded-md border border-cream-200 px-2.5 py-2 text-left text-xs text-cream-600 hover:bg-cream-50">Create inventory summary</button></div>
-        </aside>
       </div>
     </div>
   );
