@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { sql } from '@codemirror/lang-sql';
-import { oneDark } from '@codemirror/theme-one-dark';
-import { keymap } from '@codemirror/view';
+import { EditorView, keymap } from '@codemirror/view';
 import {
   CheckCircle2, ChevronDown, Clock3, Code2, Database, Download,
   LoaderCircle, PanelLeftClose, PanelLeftOpen, Play, Plus, RefreshCcw,
@@ -26,6 +25,15 @@ const EXAMPLE_SQL = `SELECT
 FROM happy_coffee.coffee_inventory
 GROUP BY 1, 2
 ORDER BY inventory_kg DESC;`;
+
+const softSqlTheme = EditorView.theme({
+  '&': { backgroundColor: '#f3f4f6', color: '#262626' },
+  '.cm-content': { caretColor: '#2563eb' },
+  '.cm-gutters': { backgroundColor: '#eef0f2', color: '#a3a3a3', border: 'none' },
+  '.cm-activeLine': { backgroundColor: '#e8edf5' },
+  '.cm-activeLineGutter': { backgroundColor: '#e8edf5' },
+  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: '#bfdbfe' },
+});
 
 function makeCell(sql = ''): Cell {
   return { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, sql };
@@ -284,7 +292,7 @@ export function DevelopmentWorkspace() {
             <div className="mx-auto w-full max-w-6xl space-y-3">
               {activeNotebook.cells.map((cell, index) => <article key={cell.id} onClick={() => setActiveCellId(cell.id)} className={clsx('overflow-hidden rounded-lg border bg-white shadow-card transition-shadow', cell.id === activeCellId ? 'border-blue-400 shadow-[0_0_0_1px_rgba(59,130,246,0.12)]' : 'border-cream-200')}>
                 <div className="flex h-10 items-center justify-between border-b border-cream-100 bg-white px-3"><div className="flex items-center gap-2"><span className="font-mono text-[11px] text-cream-400">{index + 1}</span><span className="text-xs font-medium text-cream-600">SQL</span></div><button type="button" onClick={() => void runCell(cell.id)} disabled={status !== 'ready' || cell.running} className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">{cell.running ? <LoaderCircle className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}{cell.running ? 'Running' : 'Run'} <span className="hidden sm:inline text-blue-200">⌘↵</span></button></div>
-                <CodeMirror value={cell.sql} height="200px" theme={oneDark} extensions={[sql(), keymap.of([{ key: 'Mod-Enter', run: () => { void runCell(cell.id); return true; } }])]} onChange={(value) => updateCell(cell.id, { sql: value, result: undefined, error: undefined })} basicSetup={{ lineNumbers: true, foldGutter: false, highlightActiveLine: true, autocompletion: true }} />
+                <CodeMirror value={cell.sql} height="200px" extensions={[sql(), softSqlTheme, keymap.of([{ key: 'Mod-Enter', run: () => { void runCell(cell.id); return true; } }])]} onChange={(value) => updateCell(cell.id, { sql: value, result: undefined, error: undefined })} basicSetup={{ lineNumbers: true, foldGutter: false, highlightActiveLine: true, autocompletion: true }} />
                 {cell.error && <div className="border-t border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700 whitespace-pre-wrap">{cell.error}</div>}
               </article>)}
               <button type="button" onClick={() => addCell()} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-cream-600 hover:bg-cream-100"><Plus className="w-3.5 h-3.5" /> Add SQL cell</button>
