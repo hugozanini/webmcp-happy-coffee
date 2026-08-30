@@ -36,6 +36,6 @@ describe('Sidebar', () => {
   it('renders the Happy Coffee branding', () => {
     renderSidebar();
     expect(screen.getByText('Happy Coffee')).toBeInTheDocument();
-    expect(screen.getByText('Data Catalog')).toBeInTheDocument();
+    expect(screen.getByText('Data Developer Portal')).toBeInTheDocument();
   });
 });

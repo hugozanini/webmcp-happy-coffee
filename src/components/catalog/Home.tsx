@@ -108,7 +108,7 @@ export function Home() {
         <div className="max-w-2xl mx-auto text-center">
           <div className="inline-flex items-center gap-3 mb-4" style={{ '--logo-inner': '#1a1a1a' } as React.CSSProperties}>
             <Logo size={56} className="flex-shrink-0" />
-            <h1 className="text-2xl font-semibold leading-none">Happy Coffee Data Catalog</h1>
+            <h1 className="text-2xl font-semibold leading-none">Happy Coffee Data Developer Portal</h1>
           </div>
           <SearchInput
             value={search}

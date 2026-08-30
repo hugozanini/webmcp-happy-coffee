@@ -63,7 +63,7 @@ export function WebMCPIntegration() {
         {
           name: 'search_global_catalog',
           description:
-            'Search across all datasets, pipelines, and sources. ' +
+            'Search across all datasets, pipelines, and sources in the Happy Coffee Data Developer Portal. ' +
             'IMPORTANT: Extract only the core entity name. Do NOT include words like "dataset", "pipeline", or "table".',
           inputSchema: {
             type: 'object',

@@ -8,7 +8,7 @@ export function Header() {
           <Coffee className="w-8 h-8" />
           <div>
             <h1 className="text-2xl font-bold">Happy Coffee</h1>
-            <p className="text-sm text-amber-100">Brazilian Coffee Export Data Catalog</p>
+            <p className="text-sm text-amber-100">Brazilian Coffee Export Data Developer Portal</p>
           </div>
         </div>
       </div>

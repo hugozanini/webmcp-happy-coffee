@@ -1,14 +1,13 @@
-# WebMCP Happy Coffee
+# Happy Coffee Data Developer Portal
 
-A terminal-free, fictional data catalog that demonstrates how a web application can expose safe, structured capabilities to AI agents through [WebMCP](https://webmachinelearning.github.io/webmcp/).
+A fictional data developer portal that demonstrates how a web application can expose safe, structured capabilities to AI agents through [WebMCP](https://webmachinelearning.github.io/webmcp/).
 
-The Happy Coffee catalog uses deterministic, realistic mock data for datasets, pipelines, data-quality checks, lineage, and platform costs. No catalog data is real.
+Happy Coffee uses deterministic, realistic mock data for datasets, pipelines, data-quality checks, lineage, and platform costs. No portal data is real.
 
 ## What it demonstrates
 
-- A React data catalog with realistic mock assets and operational metrics.
-- WebMCP tools for catalog search, dataset inspection, pipeline inspection, logs, and cost analysis.
-- A deliberately terminal-free browser surface: the demo does not spawn shells, execute commands, or expose the host file system.
+- A React data developer portal with realistic mock assets and operational metrics.
+- WebMCP tools for portal search, dataset inspection, pipeline inspection, logs, and cost analysis.
 
 ## Local development
 
@@ -29,6 +28,6 @@ npm run build
 
 ## Planned hosted-demo capabilities
 
-The next implementation phase adds a Cloudflare Worker and D1 database for short-lived SQL draft storage. Drafts will be storage-only, size-limited, and automatically expired within two hours. Arbitrary SQL and shell commands will never be executed.
+The next implementation phase adds a Cloudflare Worker and D1 database for short-lived SQL draft storage. Drafts will be storage-only, size-limited, and automatically expired within two hours.
 
 Deployment will use Cloudflare Workers Builds: pull requests receive preview builds, while merges to `main` automatically deploy production.

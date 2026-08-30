@@ -2,7 +2,7 @@
   "name": "webmcp-happy-coffee",
   "private": true,
   "version": "1.0.0",
-  "description": "A terminal-free Happy Coffee data catalog demo for WebMCP.",
+  "description": "A Happy Coffee Data Developer Portal demo for WebMCP.",
   "type": "module",
   "scripts": {
     "dev": "vite",
