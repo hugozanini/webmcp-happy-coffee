@@ -104,7 +104,7 @@ export function Home() {
 
   return (
     <div>
-      <div className="bg-gradient-to-br from-brand-950 via-brand-900 to-brand-800 rounded-2xl p-5 sm:p-6 mb-6 sm:mb-8 text-white">
+      <div className="bg-gradient-to-br from-brand-950 via-brand-900 to-brand-800 rounded-2xl p-5 sm:p-6 mb-5 sm:mb-6 text-white">
         <div className="max-w-2xl mx-auto text-center">
           <div className="flex flex-col sm:inline-flex sm:flex-row items-center gap-2 sm:gap-3 mb-4" style={{ '--logo-inner': '#1a1a1a' } as React.CSSProperties}>
             <Logo size={48} className="flex-shrink-0" />
@@ -123,7 +123,7 @@ export function Home() {
 
       <div className="flex flex-col xl:flex-row gap-6">
         <div className="flex-1 min-w-0">
-          <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
             <StatCard icon={Database} label="Total Datasets" value={datasets.length} />
             <StatCard icon={ShieldCheck} label="Avg Quality" value={avgQuality} detail="Score 0-100" />
             <StatCard icon={Server} label="Connected Sources" value={connectedSources} />
