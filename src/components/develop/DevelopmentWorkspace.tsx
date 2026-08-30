@@ -8,9 +8,8 @@ import {
   RotateCcw, Search, Table2, X, XCircle,
 } from 'lucide-react';
 import { useCatalogData } from '../../hooks/useCatalogData';
-import {
-  duckdbWorkspace, WORKSPACE_CHANGED_EVENT, type QueryResult, type WorkspaceTable,
-} from '../../lib/duckdb-workspace';
+import { duckdbWorkspace, WORKSPACE_CHANGED_EVENT, type QueryResult, type WorkspaceTable } from '../../lib/duckdb-workspace';
+import { DEVELOPMENT_NOTEBOOK_EVENT } from '../../lib/development-events';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useNavigate } from 'react-router-dom';
 import type { Dataset, EphemeralPublicationBundle, Pipeline, PipelineRun, QualityEntry } from '../../data/types';
@@ -64,9 +63,9 @@ const softSqlTheme = EditorView.theme({
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: '#bfdbfe' },
 });
 
-function makeCell(sql = '', kind: Cell['kind'] = 'query'): Cell {
+function makeCell(sql = '', kind: Cell['kind'] = 'query', id?: string): Cell {
   return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    id: id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     sql,
     kind,
     quality: kind === 'quality' ? { name: 'Untitled quality check', description: '', severity: 'Warning' } : undefined,
@@ -262,6 +261,34 @@ export function DevelopmentWorkspace() {
     updateNotebook(activeNotebookId, (notebook) => ({ ...notebook, cells: [...notebook.cells, nextCell] }));
     setActiveCellId(nextCell.id);
   };
+
+  useEffect(() => {
+    const handleNotebookEvent = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        type: 'add-cell' | 'open-publishing';
+        id?: string;
+        sql?: string;
+        kind?: Cell['kind'];
+        quality?: QualityConfig;
+        result?: QueryResult;
+      }>).detail;
+      if (!detail) return;
+      if (detail.type === 'open-publishing') {
+        setBottomTab('publishing');
+        return;
+      }
+      if (detail.type !== 'add-cell' || !detail.sql) return;
+      const cell = makeCell(detail.sql, detail.kind ?? 'query', detail.id);
+      cell.quality = detail.kind === 'quality' ? detail.quality ?? cell.quality : undefined;
+      cell.result = detail.result;
+      setNotebooks((current) => current.map((notebook) => notebook.id === activeNotebookId
+        ? { ...notebook, cells: [...notebook.cells, cell] }
+        : notebook));
+      setActiveCellId(cell.id);
+    };
+    window.addEventListener(DEVELOPMENT_NOTEBOOK_EVENT, handleNotebookEvent);
+    return () => window.removeEventListener(DEVELOPMENT_NOTEBOOK_EVENT, handleNotebookEvent);
+  }, [activeNotebookId]);
 
   const addNotebook = () => {
     const notebook = makeNotebook(`Untitled query ${notebooks.length + 1}`);

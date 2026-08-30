@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useCatalogData } from '../../hooks/useCatalogData';
 import { useCatalogStore } from '../../store/catalog-store';
+import { DEVELOPMENT_NOTEBOOK_EVENT } from '../../lib/development-events';
 
 // ------------------------------------------------------------------
 // Shared execution logic for the WebMCP catalog tools.
@@ -10,6 +11,16 @@ export type ToolResult = { content: Array<{ type: string; text: string }> };
 
 function text(str: string): ToolResult {
   return { content: [{ type: 'text', text: str }] };
+}
+
+function addDevelopmentCell(detail: {
+  id: string;
+  sql: string;
+  kind: 'query' | 'quality';
+  quality?: { name: string; description: string; severity: 'Info' | 'Warning' | 'Error' | 'Critical' };
+  result?: unknown;
+}) {
+  window.dispatchEvent(new CustomEvent(DEVELOPMENT_NOTEBOOK_EVENT, { detail: { type: 'add-cell', ...detail } }));
 }
 
 export function useCatalogTools() {
@@ -45,8 +56,9 @@ export function useCatalogTools() {
         try {
           const { duckdbWorkspace } = await import('../../lib/duckdb-workspace');
           const result = await duckdbWorkspace.run(sql, datasets, { source: 'agent' });
+          addDevelopmentCell({ id: `agent-${Date.now()}`, sql, kind: 'query', result });
           return text(
-            `Ran SQL in the Happy Coffee browser workspace.\n` +
+            `Ran SQL in the Happy Coffee browser workspace and added it as a visible notebook cell.\n` +
             `Rows: ${result.rowCount}; elapsed: ${result.elapsedMs} ms${result.truncated ? '; first 250 rows returned' : ''}.\n\n` +
             `${JSON.stringify(result.rows, null, 2)}`,
           );
@@ -84,6 +96,32 @@ export function useCatalogTools() {
         } catch (error) {
           return text(`Could not inspect the development workspace: ${error instanceof Error ? error.message : 'unknown error'}`);
         }
+      }
+
+      // ----------------------------------------------------------------
+      case 'create_development_sql_cell': {
+        const { sql, kind = 'query', name = '', description = '', severity = 'Warning' } = args as {
+          sql: string;
+          kind?: 'query' | 'quality';
+          name?: string;
+          description?: string;
+          severity?: 'Info' | 'Warning' | 'Error' | 'Critical';
+        };
+        if (!sql?.trim()) return text('SQL is required to create a notebook cell.');
+        navigate('/develop');
+        const id = `agent-${Date.now()}`;
+        addDevelopmentCell({
+          id, sql, kind,
+          quality: kind === 'quality' ? { name: name || 'Agent quality check', description, severity } : undefined,
+        });
+        return text(`Added ${kind === 'quality' ? 'a quality-check' : 'a query'} cell to the visible development notebook. Cell ID: ${id}.`);
+      }
+
+      // ----------------------------------------------------------------
+      case 'open_table_publishing': {
+        navigate('/develop');
+        window.dispatchEvent(new CustomEvent(DEVELOPMENT_NOTEBOOK_EVENT, { detail: { type: 'open-publishing' } }));
+        return text('Opened Table Publishing in the development workspace. Select the query cell, add metadata and schedule, then publish the mock data product.');
       }
 
       // ----------------------------------------------------------------

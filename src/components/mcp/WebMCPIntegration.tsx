@@ -85,6 +85,36 @@ export function WebMCPIntegration() {
             executeToolRef.current('create_workspace_table', args),
         },
         {
+          name: 'create_development_sql_cell',
+          readOnlyHint: false,
+          description:
+            'Add a visible SQL cell to the Happy Coffee development notebook. Use kind="quality" for a quality-check query; ' +
+            'quality checks should return the rows that violate a rule, and can use {{published_table}} when they will test a published table.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              sql: { type: 'string', description: 'The SQL statement to place in the notebook cell.' },
+              kind: { type: 'string', enum: ['query', 'quality'], description: 'Whether this is a query or a quality-check cell.' },
+              name: { type: 'string', description: 'Required for quality checks; a clear check name.' },
+              description: { type: 'string', description: 'Optional explanation of what the quality check validates.' },
+              severity: { type: 'string', enum: ['Info', 'Warning', 'Error', 'Critical'] },
+            },
+            required: ['sql'],
+          },
+          execute: (args: Record<string, unknown>) =>
+            executeToolRef.current('create_development_sql_cell', args),
+        },
+        {
+          name: 'open_table_publishing',
+          readOnlyHint: false,
+          description:
+            'Open the Table Publishing tab in the Happy Coffee development workspace. ' +
+            'Use it after creating a query cell and any optional quality-check cells so the user can review metadata, schedule, and publish the mock data product.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: (args: Record<string, unknown>) =>
+            executeToolRef.current('open_table_publishing', args),
+        },
+        {
           name: 'inspect_development_tables',
           description:
             'List the generated Happy Coffee catalog tables and temporary workspace tables available in the DuckDB development workspace.',
