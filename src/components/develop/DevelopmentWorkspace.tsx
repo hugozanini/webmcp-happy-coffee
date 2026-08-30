@@ -5,7 +5,7 @@ import { EditorView, keymap } from '@codemirror/view';
 import {
   AlertTriangle, CheckCircle2, ChevronDown, Clock3, Code2, Database, Download,
   LoaderCircle, PanelLeftClose, PanelLeftOpen, Play, Plus, RefreshCcw,
-  RotateCcw, Search, Table2, X, XCircle,
+  RotateCcw, Search, Table2, Trash2, X, XCircle,
 } from 'lucide-react';
 import { useCatalogData } from '../../hooks/useCatalogData';
 import { duckdbWorkspace, WORKSPACE_CHANGED_EVENT, type QueryResult, type WorkspaceTable } from '../../lib/duckdb-workspace';
@@ -262,6 +262,14 @@ export function DevelopmentWorkspace() {
     setActiveCellId(nextCell.id);
   };
 
+  const deleteCell = (id: string) => {
+    updateNotebook(activeNotebookId, (notebook) => {
+      const remainingCells = notebook.cells.filter((cell) => cell.id !== id);
+      if (activeCellId === id) setActiveCellId(remainingCells[0]?.id ?? '');
+      return { ...notebook, cells: remainingCells };
+    });
+  };
+
   useEffect(() => {
     const handleNotebookEvent = (event: Event) => {
       const detail = (event as CustomEvent<{
@@ -303,7 +311,7 @@ export function DevelopmentWorkspace() {
     setNotebooks(remaining);
     if (activeNotebookId === id) {
       setActiveNotebookId(remaining[0].id);
-      setActiveCellId(remaining[0].cells[0].id);
+      setActiveCellId(remaining[0].cells[0]?.id ?? '');
     }
   };
 
@@ -554,7 +562,7 @@ export function DevelopmentWorkspace() {
 
         <main className="min-w-0 flex flex-1 flex-col bg-white">
           <div className="flex h-10 items-end gap-0 border-b border-cream-200 bg-[#f5f6f8] px-2 overflow-x-auto scrollbar-thin">
-            {notebooks.map((notebook) => <div key={notebook.id} className={clsx('group flex h-10 min-w-[150px] items-center gap-2 border-r border-cream-200 px-3 text-xs', notebook.id === activeNotebookId ? 'border-t-2 border-t-blue-500 bg-white font-medium text-cream-900' : 'text-cream-500 hover:bg-cream-100')}><button type="button" onClick={() => { setActiveNotebookId(notebook.id); setActiveCellId(notebook.cells[0].id); }} className="min-w-0 flex-1 truncate text-left">{notebook.name}</button>{notebooks.length > 1 && <button type="button" onClick={() => closeNotebook(notebook.id)} className="opacity-0 group-hover:opacity-100 hover:text-cream-900"><X className="w-3.5 h-3.5" /></button>}</div>)}
+            {notebooks.map((notebook) => <div key={notebook.id} className={clsx('group flex h-10 min-w-[150px] items-center gap-2 border-r border-cream-200 px-3 text-xs', notebook.id === activeNotebookId ? 'border-t-2 border-t-blue-500 bg-white font-medium text-cream-900' : 'text-cream-500 hover:bg-cream-100')}><button type="button" onClick={() => { setActiveNotebookId(notebook.id); setActiveCellId(notebook.cells[0]?.id ?? ''); }} className="min-w-0 flex-1 truncate text-left">{notebook.name}</button>{notebooks.length > 1 && <button type="button" onClick={() => closeNotebook(notebook.id)} className="opacity-0 group-hover:opacity-100 hover:text-cream-900"><X className="w-3.5 h-3.5" /></button>}</div>)}
             <button type="button" onClick={addNotebook} title="New query tab" className="mb-1 ml-1 rounded p-1.5 text-cream-500 hover:bg-cream-200 hover:text-cream-800"><Plus className="w-4 h-4" /></button>
           </div>
           {status === 'error' && <div className="flex items-center gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700"><XCircle className="w-4 h-4" /> {statusMessage}</div>}
@@ -562,12 +570,13 @@ export function DevelopmentWorkspace() {
           <section className="min-h-0 flex flex-1 flex-col overflow-y-auto bg-[#fbfcfd] p-3 sm:p-4 scrollbar-thin">
             <div className="mx-auto w-full max-w-6xl space-y-3">
               {activeNotebook.cells.map((cell, index) => <article key={cell.id} onClick={() => setActiveCellId(cell.id)} className={clsx('overflow-hidden rounded-lg border bg-white shadow-card transition-shadow', cell.id === activeCellId ? 'border-blue-400 shadow-[0_0_0_1px_rgba(59,130,246,0.12)]' : 'border-cream-200')}>
-                <div className="flex h-10 items-center justify-between border-b border-cream-100 bg-white px-3"><div className="flex items-center gap-2"><span className="font-mono text-[11px] text-cream-400">{index + 1}</span><select aria-label={`Cell ${index + 1} type`} value={cell.kind} onChange={(event) => setCellKind(cell.id, event.target.value as Cell['kind'])} className={clsx('rounded border px-1.5 py-1 text-[11px] font-medium outline-none', cell.kind === 'quality' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-cream-200 bg-white text-cream-600')}><option value="query">Query</option><option value="quality">Quality check</option></select></div><button type="button" onClick={() => void runCell(cell.id)} disabled={status !== 'ready' || cell.running} className={clsx('inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-50', cell.kind === 'quality' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700')}>{cell.running ? <LoaderCircle className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}{cell.running ? 'Running' : cell.kind === 'quality' ? 'Run check' : 'Run'} <span className="hidden sm:inline text-white/70">⌘↵</span></button></div>
+                <div className="flex h-10 items-center justify-between border-b border-cream-100 bg-white px-3"><div className="flex items-center gap-2"><span className="font-mono text-[11px] text-cream-400">{index + 1}</span><select aria-label={`Cell ${index + 1} type`} value={cell.kind} onChange={(event) => setCellKind(cell.id, event.target.value as Cell['kind'])} className={clsx('rounded border px-1.5 py-1 text-[11px] font-medium outline-none', cell.kind === 'quality' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-cream-200 bg-white text-cream-600')}><option value="query">Query</option><option value="quality">Quality check</option></select></div><div className="flex items-center gap-1"><button type="button" onClick={(event) => { event.stopPropagation(); deleteCell(cell.id); }} aria-label={`Delete cell ${index + 1}`} title="Delete cell" className="rounded p-1.5 text-cream-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button><button type="button" onClick={() => void runCell(cell.id)} disabled={status !== 'ready' || cell.running} className={clsx('inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-50', cell.kind === 'quality' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700')}>{cell.running ? <LoaderCircle className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}{cell.running ? 'Running' : cell.kind === 'quality' ? 'Run check' : 'Run'} <span className="hidden sm:inline text-white/70">⌘↵</span></button></div></div>
                 <CodeMirror value={cell.sql} height="200px" extensions={[sql(), softSqlTheme, keymap.of([{ key: 'Mod-Enter', run: () => { void runCell(cell.id); return true; } }])]} onChange={(value) => updateCell(cell.id, { sql: value, result: undefined, error: undefined, qualityExecution: undefined })} basicSetup={{ lineNumbers: true, foldGutter: false, highlightActiveLine: true, autocompletion: true }} />
                 {cell.kind === 'quality' && cell.quality && <div className="grid gap-2 border-t border-amber-100 bg-amber-50/40 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_120px]"><input value={cell.quality.name} onChange={(event) => updateQualityConfig(cell.id, { name: event.target.value })} placeholder="Check name" className="rounded border border-amber-200 bg-white px-2 py-1.5 text-xs text-cream-800 outline-none focus:border-amber-400" /><input value={cell.quality.description} onChange={(event) => updateQualityConfig(cell.id, { description: event.target.value })} placeholder="Describe the rule (optional)" className="rounded border border-amber-200 bg-white px-2 py-1.5 text-xs text-cream-800 outline-none focus:border-amber-400" /><select aria-label="Quality severity" value={cell.quality.severity} onChange={(event) => updateQualityConfig(cell.id, { severity: event.target.value as QualitySeverity })} className="rounded border border-amber-200 bg-white px-2 py-1.5 text-xs text-cream-700 outline-none focus:border-amber-400"><option value="Info">Info</option><option value="Warning">Warning</option><option value="Error">Error</option><option value="Critical">Critical</option></select><p className="sm:col-span-3 text-[11px] text-amber-800">Return violating rows from this query. Use <code className="rounded bg-amber-100 px-1">{'{{published_table}}'}</code> to test the table during publishing.</p></div>}
                 {cell.qualityExecution && cell.quality && <QualityExecutionCard execution={cell.qualityExecution} severity={cell.quality.severity} />}
                 {cell.error && <div className="border-t border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700 whitespace-pre-wrap">{cell.error}</div>}
               </article>)}
+              {!activeNotebook.cells.length && <div className="rounded-lg border border-dashed border-cream-300 bg-white px-4 py-8 text-center text-xs text-cream-500">This notebook has no cells. Add a SQL cell to continue.</div>}
               <button type="button" onClick={() => addCell()} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-cream-600 hover:bg-cream-100"><Plus className="w-3.5 h-3.5" /> Add SQL cell</button>
             </div>
           </section>
