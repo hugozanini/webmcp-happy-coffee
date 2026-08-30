@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { Sidebar } from '../Sidebar';
 import { useCatalogStore } from '../../../store/catalog-store';
@@ -37,5 +38,16 @@ describe('Sidebar', () => {
     renderSidebar();
     expect(screen.getByText('Happy Coffee')).toBeInTheDocument();
     expect(screen.getByText('Data Developer Portal')).toBeInTheDocument();
+  });
+
+  it('can collapse and expand the navigation', async () => {
+    const user = userEvent.setup();
+    renderSidebar();
+
+    await user.click(screen.getByRole('button', { name: 'Collapse navigation' }));
+    expect(screen.getByRole('button', { name: 'Expand navigation' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Expand navigation' }));
+    expect(screen.getByRole('button', { name: 'Collapse navigation' })).toBeInTheDocument();
   });
 });
