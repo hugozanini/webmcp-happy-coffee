@@ -61,14 +61,14 @@ describe('WebMCPIntegration', () => {
         consoleSpy.mockRestore();
     });
 
-  it('registers 34 tools when mounted', () => {
+  it('registers 38 tools when mounted', () => {
         render(
             <MemoryRouter>
                 <WebMCPIntegration />
             </MemoryRouter>
         );
 
-        expect(modelContextMock.registerTool).toHaveBeenCalledTimes(34);
+        expect(modelContextMock.registerTool).toHaveBeenCalledTimes(38);
         expect(modelContextMock.registerTool.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
         const triggerTool = modelContextMock.registerTool.mock.calls
             .map(([tool]: [any]) => tool)

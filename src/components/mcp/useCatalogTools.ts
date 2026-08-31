@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCatalogData } from '../../hooks/useCatalogData';
 import { useCatalogStore } from '../../store/catalog-store';
-import { requestDevelopmentAction } from '../../lib/development-bridge';
+import { hasDevelopmentActionHandler, requestDevelopmentAction } from '../../lib/development-bridge';
 import { webmcpResponse } from '../../lib/webmcp-contract';
 
 // ------------------------------------------------------------------
@@ -162,6 +162,55 @@ export function useCatalogTools() {
         const totalAmount = matching.reduce((sum, cost) => sum + cost.amount, 0);
         navigate(`/costs?${new URLSearchParams({ ...(dateRange ? { range: dateRange } : {}), ...(category ? { category } : {}), ...(entityType ? { entityType } : {}), ...(search ? { q: search } : {}) }).toString()}`);
         return text(webmcpResponse('cost_entry_list', { total: matching.length, offset, totalAmount, currency: 'USD', entries: page }, { navigation: { route: '/costs' }, nextActions: ['analyze_infrastructure_costs', 'view_dataset_details', 'view_pipeline_details'] }));
+      }
+
+      case 'get_development_workspace_status': {
+        navigate('/develop');
+        const { duckdbWorkspace } = await import('../../lib/duckdb-workspace');
+        const session = await duckdbWorkspace.prepare(datasets);
+        const tables = await duckdbWorkspace.listTables(datasets);
+        return text(webmcpResponse('development_workspace_status', {
+          ready: true,
+          session,
+          handlerMounted: hasDevelopmentActionHandler(),
+          catalogTables: tables.filter((table) => table.schema === 'happy_coffee'),
+          workspaceTables: tables.filter((table) => table.schema === 'workspace'),
+        }, { navigation: { route: '/develop' }, nextActions: ['inspect_development_workspace', 'describe_development_table', 'create_development_sql_cell'] }));
+      }
+
+      case 'describe_development_table': {
+        const { schema, name } = args as { schema: string; name: string };
+        navigate('/develop');
+        try {
+          const { duckdbWorkspace } = await import('../../lib/duckdb-workspace');
+          const columns = await duckdbWorkspace.describeTable(schema, name, datasets);
+          return text(webmcpResponse('development_table_schema', { schema, name, columns }, { navigation: { route: '/develop' }, nextActions: ['preview_development_table', 'create_development_sql_cell'] }));
+        } catch (error) {
+          return text(webmcpResponse('development_table_schema', { schema, name, columns: [], error: error instanceof Error ? error.message : 'Unable to describe table.' }, { navigation: { route: '/develop' } }));
+        }
+      }
+
+      case 'preview_development_table': {
+        const { schema, name, limit, offset } = args as { schema: string; name: string; limit?: number; offset?: number };
+        navigate('/develop');
+        try {
+          const { duckdbWorkspace } = await import('../../lib/duckdb-workspace');
+          const result = await duckdbWorkspace.previewTable(schema, name, datasets, limit, offset);
+          return text(webmcpResponse('development_table_preview', { schema, name, ...result }, { navigation: { route: '/develop' }, nextActions: ['create_development_sql_cell', 'run_duckdb_sql'] }));
+        } catch (error) {
+          return text(webmcpResponse('development_table_preview', { schema, name, rows: [], error: error instanceof Error ? error.message : 'Unable to preview table.' }, { navigation: { route: '/develop' } }));
+        }
+      }
+
+      case 'set_development_view': {
+        navigate('/develop');
+        const result = await requestDevelopmentAction({
+          type: 'set-view', bottomTab: args['bottomTab'] as 'results' | 'publishing' | undefined,
+          explorerCollapsed: args['explorerCollapsed'] as boolean | undefined,
+          bottomPanelOpen: args['bottomPanelOpen'] as boolean | undefined,
+          bottomPanelHeight: args['bottomPanelHeight'] as number | undefined,
+        });
+        return text(webmcpResponse('development_view', { applied: result.ok, message: result.message }, { navigation: { route: '/develop', tab: args['bottomTab'] as string | undefined } }));
       }
 
       // ----------------------------------------------------------------

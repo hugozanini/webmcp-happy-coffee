@@ -104,6 +104,31 @@ export function WebMCPIntegration() {
           execute: (args: Record<string, unknown>) => executeToolRef.current('list_cost_entries', args),
         },
         {
+          name: 'get_development_workspace_status',
+          description: 'Start and inspect the browser-local DuckDB workspace without waiting for or scraping the UI. Returns session expiry and available tables.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('get_development_workspace_status', args),
+        },
+        {
+          name: 'describe_development_table',
+          description: 'Return the schema of a happy_coffee catalog table or workspace temporary table before writing SQL.',
+          inputSchema: { type: 'object', properties: { schema: { type: 'string', enum: ['happy_coffee', 'workspace'] }, name: { type: 'string' } }, required: ['schema', 'name'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('describe_development_table', args),
+        },
+        {
+          name: 'preview_development_table',
+          description: 'Return a bounded DuckDB table preview without needing to read the visible results grid.',
+          inputSchema: { type: 'object', properties: { schema: { type: 'string', enum: ['happy_coffee', 'workspace'] }, name: { type: 'string' }, limit: { type: 'number' }, offset: { type: 'number' } }, required: ['schema', 'name'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('preview_development_table', args),
+        },
+        {
+          name: 'set_development_view',
+          readOnlyHint: false,
+          description: 'Set the visible Develop workspace state for a user: Results or Table Publishing, explorer collapsed state, and output-panel visibility or pixel height.',
+          inputSchema: { type: 'object', properties: { bottomTab: { type: 'string', enum: ['results', 'publishing'] }, explorerCollapsed: { type: 'boolean' }, bottomPanelOpen: { type: 'boolean' }, bottomPanelHeight: { type: 'number' } } },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('set_development_view', args),
+        },
+        {
           name: 'open_development_workspace',
           description:
             'Open the Happy Coffee DuckDB development workspace and list the generated catalog tables available for SQL development. ' +
