@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { sql } from '@codemirror/lang-sql';
 import { EditorView, keymap } from '@codemirror/view';
 import {
-  AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Clock3, Code2, Database, Download,
+  AlertTriangle, CheckCircle2, ChevronDown, Clock3, Code2, Database, Download,
   LoaderCircle, PanelBottomClose, PanelBottomOpen, PanelLeftClose, PanelLeftOpen, Play, Plus, RefreshCcw,
   RotateCcw, Search, Table2, Trash2, X, XCircle,
 } from 'lucide-react';
@@ -33,7 +33,6 @@ type Cell = {
 };
 type Notebook = { id: string; name: string; cells: Cell[] };
 type BottomTab = 'results' | 'publishing';
-type BottomPanelSize = 'compact' | 'default' | 'expanded';
 type PublishingDraft = {
   sourceCellId: string;
   name: string;
@@ -67,12 +66,9 @@ const softSqlTheme = EditorView.theme({
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: '#bfdbfe' },
 });
 
-const BOTTOM_PANEL_SIZES: BottomPanelSize[] = ['compact', 'default', 'expanded'];
-const BOTTOM_PANEL_HEIGHTS: Record<BottomPanelSize, string> = {
-  compact: 'h-[28%] min-h-[190px]',
-  default: 'h-[42%] min-h-[250px]',
-  expanded: 'h-[62%] min-h-[340px]',
-};
+const DEFAULT_OUTPUT_PANEL_HEIGHT = 'h-[42%] min-h-[190px]';
+const MIN_OUTPUT_PANEL_HEIGHT = 190;
+const MIN_EDITOR_HEIGHT = 240;
 
 function makeCell(sql = '', kind: Cell['kind'] = 'query', id?: string): Cell {
   return {
@@ -191,7 +187,9 @@ export function DevelopmentWorkspace() {
   const [resultSearch, setResultSearch] = useState('');
   const [bottomTab, setBottomTab, bottomTabRef] = useLiveState<BottomTab>('results');
   const [bottomPanelOpen, setBottomPanelOpen] = useState(true);
-  const [bottomPanelSize, setBottomPanelSize] = useState<BottomPanelSize>('default');
+  const [bottomPanelHeight, setBottomPanelHeight] = useState<number | null>(null);
+  const outputPanelRef = useRef<HTMLElement>(null);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [publicationError, setPublicationError] = useState('');
   const [publishedDatasetId, setPublishedDatasetId, publishedDatasetIdRef] = useLiveState<string | null>(null);
@@ -202,6 +200,36 @@ export function DevelopmentWorkspace() {
     transformations: 'Aggregates Happy Coffee inventory by variety and grade.', includedQualityCellIds: [], fieldDescriptions: {},
   }));
   useDocumentTitle('Develop with DuckDB');
+
+  useEffect(() => () => resizeCleanupRef.current?.(), []);
+
+  const startOutputPanelResize = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    resizeCleanupRef.current?.();
+
+    const panel = outputPanelRef.current;
+    const workspace = panel?.parentElement;
+    if (!panel || !workspace) return;
+
+    const startY = event.clientY;
+    const startHeight = panel.getBoundingClientRect().height;
+    const maximumHeight = Math.max(MIN_OUTPUT_PANEL_HEIGHT, workspace.getBoundingClientRect().height - MIN_EDITOR_HEIGHT);
+    const resize = (moveEvent: PointerEvent) => {
+      const nextHeight = Math.min(maximumHeight, Math.max(MIN_OUTPUT_PANEL_HEIGHT, startHeight + startY - moveEvent.clientY));
+      setBottomPanelHeight(Math.round(nextHeight));
+    };
+    const stop = () => {
+      window.removeEventListener('pointermove', resize);
+      window.removeEventListener('pointerup', stop);
+      window.removeEventListener('pointercancel', stop);
+      resizeCleanupRef.current = null;
+    };
+
+    window.addEventListener('pointermove', resize);
+    window.addEventListener('pointerup', stop);
+    window.addEventListener('pointercancel', stop);
+    resizeCleanupRef.current = stop;
+  }, []);
 
   const activeNotebook = notebooks.find((notebook) => notebook.id === activeNotebookId) ?? notebooks[0];
   const activeCell = activeNotebook.cells.find((cell) => cell.id === activeCellId) ?? activeNotebook.cells[0];
@@ -529,7 +557,7 @@ export function DevelopmentWorkspace() {
             activeNotebookId: activeNotebookIdRef.current, activeCellId: activeCellIdRef.current,
             bottomTab: bottomTabRef.current,
             bottomPanelOpen,
-            bottomPanelSize,
+            bottomPanelHeight,
             notebooks: notebooksRef.current.map((notebook) => ({
               id: notebook.id, name: notebook.name,
               cells: notebook.cells.map((cell, index) => ({
@@ -652,7 +680,7 @@ export function DevelopmentWorkspace() {
           if (action.bottomTab) setBottomTab(action.bottomTab);
           if (action.explorerCollapsed !== undefined) setExplorerCollapsed(action.explorerCollapsed);
           if (action.bottomPanelOpen !== undefined) setBottomPanelOpen(action.bottomPanelOpen);
-          if (action.bottomPanelSize) setBottomPanelSize(action.bottomPanelSize);
+          if (action.bottomPanelHeight !== undefined) setBottomPanelHeight(Math.max(MIN_OUTPUT_PANEL_HEIGHT, action.bottomPanelHeight));
           return respond('Updated development workspace view.');
         default:
           return fail('Unsupported development workspace action.');
@@ -660,7 +688,7 @@ export function DevelopmentWorkspace() {
     };
     return registerDevelopmentActionHandler(handleAction);
   }, [
-    activeCellIdRef, activeNotebookIdRef, bottomPanelOpen, bottomPanelSize, bottomTabRef, draftRef, executeCell, expiresAtRef, notebooksRef,
+    activeCellIdRef, activeNotebookIdRef, bottomPanelHeight, bottomPanelOpen, bottomTabRef, draftRef, executeCell, expiresAtRef, notebooksRef,
     publishedDatasetIdRef, resetSession, setActiveCellId, setActiveNotebookId, setBottomTab, setDraft,
     setExplorerCollapsed, setNotebooks, setPublicationError, statusRef, tablesRef, updateCellInNotebook,
   ]);
@@ -727,13 +755,14 @@ export function DevelopmentWorkspace() {
               <button type="button" onClick={() => addCell()} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-cream-600 hover:bg-cream-100"><Plus className="w-3.5 h-3.5" /> Add SQL cell</button>
             </div>
           </section>
-          {bottomPanelOpen ? <section aria-label="Workspace output panel" className={clsx(BOTTOM_PANEL_HEIGHTS[bottomPanelSize], 'flex-shrink-0 border-t border-cream-300 bg-white flex flex-col')}>
+          {bottomPanelOpen ? <section ref={outputPanelRef} aria-label="Workspace output panel" style={bottomPanelHeight ? { height: `${bottomPanelHeight}px` } : undefined} className={clsx(DEFAULT_OUTPUT_PANEL_HEIGHT, 'relative flex-shrink-0 border-t border-cream-300 bg-white flex flex-col')}>
+            <div role="separator" aria-label="Resize output panel" aria-orientation="horizontal" onPointerDown={startOutputPanelResize} title="Drag to resize the output panel" className="group absolute inset-x-0 -top-1 z-10 flex h-2 cursor-row-resize touch-none items-center"><span className="mx-3 h-px flex-1 bg-transparent transition-colors group-hover:bg-blue-400 group-active:bg-blue-600" /></div>
             <div className="flex h-10 items-center border-b border-cream-200 px-3">
               <div className="flex h-full items-center gap-5">
                 <button type="button" onClick={() => setBottomTab('results')} className={clsx('h-full border-b-2 text-xs font-medium', bottomTab === 'results' ? 'border-blue-600 text-blue-700' : 'border-transparent text-cream-500 hover:text-cream-800')}>Results {activeCell?.result ? `(${activeCell.result.rowCount.toLocaleString()})` : ''}</button>
                 <button type="button" onClick={() => setBottomTab('publishing')} className={clsx('h-full border-b-2 text-xs font-medium', bottomTab === 'publishing' ? 'border-blue-600 text-blue-700' : 'border-transparent text-cream-500 hover:text-cream-800')}>Table Publishing</button>
               </div>
-              <div className="ml-auto flex items-center gap-1.5">{bottomTab === 'results' && activeCell?.result && <><span className="hidden sm:inline text-[11px] text-cream-500">{activeCell.result.elapsedMs} ms{activeCell.result.truncated ? ' · first 250 rows' : ''}</span><label className="hidden md:flex items-center gap-1.5 rounded border border-cream-200 px-2 py-1 text-cream-400"><Search className="w-3 h-3" /><input value={resultSearch} onChange={(event) => setResultSearch(event.target.value)} placeholder="Search results" className="w-28 bg-transparent text-[11px] text-cream-700 outline-none" /></label><button type="button" title="CSV export is planned" className="rounded p-1 text-cream-400 hover:text-cream-700"><Download className="w-3.5 h-3.5" /></button></>}<span className="mx-0.5 h-4 w-px bg-cream-200" /><button type="button" onClick={() => setBottomPanelSize((size) => BOTTOM_PANEL_SIZES[Math.max(0, BOTTOM_PANEL_SIZES.indexOf(size) - 1)])} disabled={bottomPanelSize === 'compact'} aria-label="Decrease panel height" title="Make panel smaller" className="rounded p-1 text-cream-500 hover:bg-cream-100 hover:text-cream-800 disabled:cursor-not-allowed disabled:opacity-35"><ChevronDown className="w-3.5 h-3.5" /></button><button type="button" onClick={() => setBottomPanelSize((size) => BOTTOM_PANEL_SIZES[Math.min(BOTTOM_PANEL_SIZES.length - 1, BOTTOM_PANEL_SIZES.indexOf(size) + 1)])} disabled={bottomPanelSize === 'expanded'} aria-label="Increase panel height" title="Make panel larger" className="rounded p-1 text-cream-500 hover:bg-cream-100 hover:text-cream-800 disabled:cursor-not-allowed disabled:opacity-35"><ChevronUp className="w-3.5 h-3.5" /></button><button type="button" onClick={() => setBottomPanelOpen(false)} aria-label="Close output panel" title="Close results and publishing panel" className="rounded p-1 text-cream-500 hover:bg-cream-100 hover:text-cream-800"><PanelBottomClose className="w-3.5 h-3.5" /></button></div>
+              <div className="ml-auto flex items-center gap-1.5">{bottomTab === 'results' && activeCell?.result && <><span className="hidden sm:inline text-[11px] text-cream-500">{activeCell.result.elapsedMs} ms{activeCell.result.truncated ? ' · first 250 rows' : ''}</span><label className="hidden md:flex items-center gap-1.5 rounded border border-cream-200 px-2 py-1 text-cream-400"><Search className="w-3 h-3" /><input value={resultSearch} onChange={(event) => setResultSearch(event.target.value)} placeholder="Search results" className="w-28 bg-transparent text-[11px] text-cream-700 outline-none" /></label><button type="button" title="CSV export is planned" className="rounded p-1 text-cream-400 hover:text-cream-700"><Download className="w-3.5 h-3.5" /></button></>}<button type="button" onClick={() => setBottomPanelOpen(false)} aria-label="Close output panel" title="Close results and publishing panel" className="ml-1 rounded p-1 text-cream-500 hover:bg-cream-100 hover:text-cream-800"><PanelBottomClose className="w-3.5 h-3.5" /></button></div>
             </div>
             {bottomTab === 'results' ? <div className="min-h-0 flex-1">{visibleResult ? <ResultGrid result={visibleResult} /> : <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-cream-400"><Table2 className="w-5 h-5" /><p className="text-xs">Run the active SQL cell to view results.</p></div>}</div> : <div className="min-h-0 flex-1 overflow-y-auto bg-[#fbfcfd] p-3 scrollbar-thin sm:p-4">
               <div className="mx-auto grid max-w-5xl gap-3 xl:grid-cols-[1.1fr_0.9fr]">

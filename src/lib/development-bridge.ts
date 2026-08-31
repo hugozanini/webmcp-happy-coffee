@@ -48,7 +48,7 @@ export type DevelopmentBridgeAction =
     bottomTab?: 'results' | 'publishing';
     explorerCollapsed?: boolean;
     bottomPanelOpen?: boolean;
-    bottomPanelSize?: 'compact' | 'default' | 'expanded';
+    bottomPanelHeight?: number;
   };
 
 export type DevelopmentBridgeResult = { ok: boolean; message: string; data?: unknown };
