@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../layout/PageHeader';
 import { SearchInput } from '../ui/SearchInput';
 import { FilterChips } from '../ui/FilterChips';
@@ -119,6 +120,8 @@ const columns: Column<QualityEntry>[] = [
 export function Quality() {
   const { qualityChecks } = useCatalogData();
   useDocumentTitle('Data Quality');
+  const [searchParams] = useSearchParams();
+  const datasetId = searchParams.get('dataset');
   const [search, setSearch] = useState('');
   const [severities, setSeverities] = useState<string[]>([]);
   const [checkTypes, setCheckTypes] = useState<string[]>([]);
@@ -126,6 +129,7 @@ export function Quality() {
 
   const filtered = useMemo(() => {
     let result = qualityChecks;
+    if (datasetId) result = result.filter((entry) => entry.datasetId === datasetId);
     if (search) {
       const q = search.toLowerCase();
       result = result.filter((e) =>
@@ -142,7 +146,7 @@ export function Quality() {
       result = result.filter((e) => results.includes(e.result));
     }
     return [...result].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [qualityChecks, search, severities, checkTypes, results]);
+  }, [qualityChecks, datasetId, search, severities, checkTypes, results]);
 
   return (
     <div>

@@ -1,7 +1,8 @@
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useCatalogData } from '../../hooks/useCatalogData';
 import { useCatalogStore } from '../../store/catalog-store';
-import { requestDevelopmentAction } from '../../lib/development-bridge';
+import { hasDevelopmentActionHandler, requestDevelopmentAction } from '../../lib/development-bridge';
+import { webmcpResponse } from '../../lib/webmcp-contract';
 
 // ------------------------------------------------------------------
 // Shared execution logic for the WebMCP catalog tools.
@@ -15,7 +16,8 @@ function text(str: string): ToolResult {
 
 export function useCatalogTools() {
   const navigate = useNavigate();
-  const { datasets, pipelines, pipelineRuns, costs } = useCatalogData();
+  const location = useLocation();
+  const { initialized, datasets, dataSources, lineage, pipelines, pipelineRuns, qualityChecks, costs } = useCatalogData();
   const startMockPipelineRun = useCatalogStore((s) => s.startMockPipelineRun);
 
   const executeTool = async (
@@ -23,6 +25,193 @@ export function useCatalogTools() {
     args: Record<string, unknown>,
   ): Promise<ToolResult> => {
     switch (name) {
+      // ----------------------------------------------------------------
+      case 'get_portal_snapshot': {
+        const route = `${location.pathname}${location.search}`;
+        return text(webmcpResponse('portal_snapshot', {
+          portal: {
+            name: 'Happy Coffee Data Developer Portal',
+            dataMode: 'generated-demo-data',
+            executionMode: 'browser-local DuckDB for Develop',
+            initialized: Boolean(initialized),
+          },
+          counts: {
+            datasets: datasets.length,
+            dataSources: dataSources.length,
+            pipelines: pipelines.length,
+            pipelineRuns: pipelineRuns.length,
+            qualityChecks: qualityChecks.length,
+            lineageNodes: lineage.length,
+            costEntries: costs.length,
+          },
+          routes: [
+            { path: '/', purpose: 'Home dashboard and recent catalog activity' },
+            { path: '/datasets', purpose: 'Dataset catalog and metadata' },
+            { path: '/sources', purpose: 'Source health and connected datasets' },
+            { path: '/quality', purpose: 'Quality-check history and failures' },
+            { path: '/pipelines', purpose: 'Pipelines, runs, and logs' },
+            { path: '/costs', purpose: 'Infrastructure cost analysis' },
+            { path: '/develop', purpose: 'DuckDB notebook and user-confirmed table publishing' },
+          ],
+          safeguards: {
+            publishing: 'Agents may stage a publication but only a user click can publish it.',
+            pipelineExecution: 'Pipeline execution is mocked and browser-local to this demo.',
+            expiry: 'Develop workspace tables and published demo bundles expire with the local session.',
+          },
+        }, {
+          navigation: { route },
+          nextActions: ['list_data_sources', 'filter_datasets', 'list_quality_checks', 'filter_pipelines', 'analyze_infrastructure_costs', 'inspect_development_workspace'],
+        }));
+      }
+
+      // ----------------------------------------------------------------
+      case 'list_data_sources': {
+        const { query = '', statuses } = args as { query?: string; statuses?: string[] };
+        const q = query.toLowerCase();
+        const sources = dataSources.filter((source) =>
+          (!q || [source.name, source.system, source.owner, source.type].some((value) => value.toLowerCase().includes(q))) &&
+          (!statuses?.length || statuses.includes(source.connectionStatus)),
+        ).map((source) => ({ ...source, linkedDatasetIds: datasets.filter((dataset) => dataset.source === source.name).map((dataset) => dataset.id) }));
+        navigate(`/sources?${new URLSearchParams({ ...(query ? { q: query } : {}) }).toString()}`);
+        return text(webmcpResponse('data_source_list', { total: sources.length, sources }, { navigation: { route: '/sources' }, nextActions: ['inspect_data_source', 'filter_datasets'] }));
+      }
+
+      case 'inspect_data_source': {
+        const id = args['id'] as string;
+        const source = dataSources.find((item) => item.id === id);
+        if (!source) return text(webmcpResponse('data_source_detail', { id, found: false }, { navigation: { route: '/sources', selectedId: id } }));
+        const linkedDatasets = datasets.filter((dataset) => dataset.source === source.name).map((dataset) => ({ id: dataset.id, name: dataset.displayName, type: dataset.type, qualityScore: dataset.qualityScore }));
+        navigate(`/sources?source=${encodeURIComponent(id)}`);
+        return text(webmcpResponse('data_source_detail', { source, linkedDatasets }, { navigation: { route: '/sources', selectedId: id }, nextActions: ['view_dataset_details', 'get_dataset_lineage'] }));
+      }
+
+      case 'list_quality_checks': {
+        const { datasetId, query = '', severities, results, checkTypes, limit = 50 } = args as { datasetId?: string; query?: string; severities?: string[]; results?: string[]; checkTypes?: string[]; limit?: number };
+        const q = query.toLowerCase();
+        const checks = qualityChecks.filter((check) =>
+          (!datasetId || check.datasetId === datasetId) &&
+          (!q || [check.datasetName, check.message, check.rule].some((value) => value.toLowerCase().includes(q))) &&
+          (!severities?.length || severities.includes(check.severity)) &&
+          (!results?.length || results.includes(check.result)) &&
+          (!checkTypes?.length || checkTypes.includes(check.checkType)),
+        ).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        navigate(`/quality${datasetId ? `?dataset=${encodeURIComponent(datasetId)}` : ''}`);
+        return text(webmcpResponse('quality_check_list', { total: checks.length, checks: checks.slice(0, Math.min(Math.max(1, limit), 100)), truncated: checks.length > limit }, { navigation: { route: '/quality', selectedId: datasetId }, nextActions: ['inspect_quality_check', 'view_dataset_details'] }));
+      }
+
+      case 'inspect_quality_check': {
+        const id = args['id'] as string;
+        const check = qualityChecks.find((item) => item.id === id);
+        navigate(`/quality?check=${encodeURIComponent(id)}`);
+        return text(webmcpResponse('quality_check_detail', { found: Boolean(check), check: check ?? null, dataset: check ? datasets.find((dataset) => dataset.id === check.datasetId) : null }, { navigation: { route: '/quality', selectedId: id } }));
+      }
+
+      case 'get_dataset_lineage': {
+        const datasetId = args['datasetId'] as string;
+        const dataset = datasets.find((item) => item.id === datasetId);
+        const nodes = lineage.filter((node) => node.datasetIds.includes(datasetId)).map((node) => ({ ...node, datasets: node.datasetIds.map((id) => ({ id, name: datasets.find((item) => item.id === id)?.displayName ?? id })) }));
+        const nodeIds = new Set(nodes.map((node) => node.id));
+        const edges = nodes.filter((node) => node.parentId && nodeIds.has(node.parentId)).map((node) => ({ source: node.parentId!, target: node.id }));
+        navigate(`/datasets/${datasetId}?tab=lineage`);
+        return text(webmcpResponse('dataset_lineage', { found: Boolean(dataset), dataset: dataset ? { id: dataset.id, name: dataset.displayName } : null, nodes, edges }, { navigation: { route: `/datasets/${datasetId}`, selectedId: datasetId, tab: 'lineage' }, nextActions: ['view_dataset_details', 'view_pipeline_details'] }));
+      }
+
+      case 'preview_dataset_data': {
+        const { id, limit = 25, offset = 0, columns } = args as { id: string; limit?: number; offset?: number; columns?: string[] };
+        const dataset = datasets.find((item) => item.id === id);
+        if (!dataset) return text(webmcpResponse('dataset_preview', { found: false, id }, { navigation: { route: '/datasets', selectedId: id } }));
+        const availableColumns = dataset.fields.map((field) => field.name);
+        const selectedColumns = columns?.length ? columns.filter((column) => availableColumns.includes(column)) : availableColumns;
+        const rows = dataset.sampleData.slice(Math.max(0, offset), Math.max(0, offset) + Math.min(Math.max(1, limit), 100)).map((row) => Object.fromEntries(selectedColumns.map((column) => [column, row[column]])));
+        navigate(`/datasets/${id}?tab=data`);
+        return text(webmcpResponse('dataset_preview', { dataset: { id: dataset.id, name: dataset.displayName }, columns: selectedColumns, offset, totalSampleRows: dataset.sampleData.length, rows }, { navigation: { route: `/datasets/${id}`, selectedId: id, tab: 'data' }, nextActions: ['view_dataset_details', 'get_dataset_lineage'] }));
+      }
+
+      case 'list_pipeline_runs': {
+        const { pipelineId, statuses, limit = 50, offset = 0 } = args as { pipelineId?: string; statuses?: string[]; limit?: number; offset?: number };
+        const matching = pipelineRuns.filter((run) => (!pipelineId || run.pipelineId === pipelineId) && (!statuses?.length || statuses.includes(run.status))).sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+        const page = matching.slice(Math.max(0, offset), Math.max(0, offset) + Math.min(Math.max(1, limit), 100)).map((run) => ({
+          id: run.id, pipelineId: run.pipelineId, pipelineName: run.pipelineName, runNumber: run.runNumber, status: run.status,
+          startTime: run.startTime, endTime: run.endTime, duration: run.duration, recordsProcessed: run.recordsProcessed,
+          recordsFailed: run.recordsFailed, triggerType: run.triggerType, environment: run.parameters?.environment ?? null,
+        }));
+        navigate(pipelineId ? `/pipelines/${pipelineId}?tab=runs` : '/pipelines');
+        return text(webmcpResponse('pipeline_run_list', { total: matching.length, offset, runs: page }, { navigation: { route: pipelineId ? `/pipelines/${pipelineId}` : '/pipelines', selectedId: pipelineId, tab: 'runs' }, nextActions: ['inspect_pipeline_run', 'view_pipeline_details'] }));
+      }
+
+      case 'inspect_pipeline_run': {
+        const { pipelineId, runId } = args as { pipelineId: string; runId: string };
+        const run = pipelineRuns.find((item) => item.pipelineId === pipelineId && item.id === runId);
+        navigate(`/pipelines/${pipelineId}?tab=runs&run=${encodeURIComponent(runId)}`);
+        return text(webmcpResponse('pipeline_run_detail', { found: Boolean(run), run: run ?? null, pipeline: pipelines.find((pipeline) => pipeline.id === pipelineId) ?? null }, { navigation: { route: `/pipelines/${pipelineId}`, selectedId: runId, tab: 'runs' }, notices: ['Pipeline run execution is mocked in this demo.'] }));
+      }
+
+      case 'list_cost_entries': {
+        const { dateRange, category, entityType, entityId, search = '', limit = 50, offset = 0 } = args as { dateRange?: string; category?: string; entityType?: string; entityId?: string; search?: string; limit?: number; offset?: number };
+        const cutoff = dateRange ? Date.now() - Number(dateRange) * 24 * 60 * 60 * 1000 : null;
+        const q = search.toLowerCase();
+        const matching = costs.filter((cost) =>
+          (!cutoff || new Date(cost.date).getTime() >= cutoff) &&
+          (!category || cost.category === category) &&
+          (!entityType || cost.entityType === entityType) &&
+          (!entityId || cost.entityId === entityId) &&
+          (!q || [cost.description, cost.subcategory, cost.category].some((value) => value.toLowerCase().includes(q))),
+        ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const page = matching.slice(Math.max(0, offset), Math.max(0, offset) + Math.min(Math.max(1, limit), 100));
+        const totalAmount = matching.reduce((sum, cost) => sum + cost.amount, 0);
+        navigate(`/costs?${new URLSearchParams({ ...(dateRange ? { range: dateRange } : {}), ...(category ? { category } : {}), ...(entityType ? { entityType } : {}), ...(search ? { q: search } : {}) }).toString()}`);
+        return text(webmcpResponse('cost_entry_list', { total: matching.length, offset, totalAmount, currency: 'USD', entries: page }, { navigation: { route: '/costs' }, nextActions: ['analyze_infrastructure_costs', 'view_dataset_details', 'view_pipeline_details'] }));
+      }
+
+      case 'get_development_workspace_status': {
+        navigate('/develop');
+        const { duckdbWorkspace } = await import('../../lib/duckdb-workspace');
+        const session = await duckdbWorkspace.prepare(datasets);
+        const tables = await duckdbWorkspace.listTables(datasets);
+        return text(webmcpResponse('development_workspace_status', {
+          ready: true,
+          session,
+          handlerMounted: hasDevelopmentActionHandler(),
+          catalogTables: tables.filter((table) => table.schema === 'happy_coffee'),
+          workspaceTables: tables.filter((table) => table.schema === 'workspace'),
+        }, { navigation: { route: '/develop' }, nextActions: ['inspect_development_workspace', 'describe_development_table', 'create_development_sql_cell'] }));
+      }
+
+      case 'describe_development_table': {
+        const { schema, name } = args as { schema: string; name: string };
+        navigate('/develop');
+        try {
+          const { duckdbWorkspace } = await import('../../lib/duckdb-workspace');
+          const columns = await duckdbWorkspace.describeTable(schema, name, datasets);
+          return text(webmcpResponse('development_table_schema', { schema, name, columns }, { navigation: { route: '/develop' }, nextActions: ['preview_development_table', 'create_development_sql_cell'] }));
+        } catch (error) {
+          return text(webmcpResponse('development_table_schema', { schema, name, columns: [], error: error instanceof Error ? error.message : 'Unable to describe table.' }, { navigation: { route: '/develop' } }));
+        }
+      }
+
+      case 'preview_development_table': {
+        const { schema, name, limit, offset } = args as { schema: string; name: string; limit?: number; offset?: number };
+        navigate('/develop');
+        try {
+          const { duckdbWorkspace } = await import('../../lib/duckdb-workspace');
+          const result = await duckdbWorkspace.previewTable(schema, name, datasets, limit, offset);
+          return text(webmcpResponse('development_table_preview', { schema, name, ...result }, { navigation: { route: '/develop' }, nextActions: ['create_development_sql_cell', 'run_duckdb_sql'] }));
+        } catch (error) {
+          return text(webmcpResponse('development_table_preview', { schema, name, rows: [], error: error instanceof Error ? error.message : 'Unable to preview table.' }, { navigation: { route: '/develop' } }));
+        }
+      }
+
+      case 'set_development_view': {
+        navigate('/develop');
+        const result = await requestDevelopmentAction({
+          type: 'set-view', bottomTab: args['bottomTab'] as 'results' | 'publishing' | undefined,
+          explorerCollapsed: args['explorerCollapsed'] as boolean | undefined,
+          bottomPanelOpen: args['bottomPanelOpen'] as boolean | undefined,
+          bottomPanelHeight: args['bottomPanelHeight'] as number | undefined,
+        });
+        return text(webmcpResponse('development_view', { applied: result.ok, message: result.message }, { navigation: { route: '/develop', tab: args['bottomTab'] as string | undefined } }));
+      }
+
       // ----------------------------------------------------------------
       case 'open_development_workspace': {
         navigate('/develop');
@@ -192,7 +381,13 @@ export function useCatalogTools() {
       case 'view_home_dashboard': {
         const tab = (args['tab'] as string | undefined) ?? 'all';
         navigate(`/?tab=${tab}`);
-        return text(`Navigated to Home Dashboard with tab=${tab}`);
+        return text(`Navigated to Home Dashboard with tab=${tab}. Dashboard context: ${JSON.stringify({
+          datasets: datasets.length,
+          dataSources: dataSources.length,
+          pipelines: pipelines.length,
+          connectedSources: dataSources.filter((source) => source.connectionStatus === 'Connected').length,
+          recentQualityChecks: [...qualityChecks].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 8).map((check) => ({ id: check.id, datasetId: check.datasetId, result: check.result, severity: check.severity, message: check.message })),
+        })}`);
       }
 
       // ----------------------------------------------------------------
@@ -216,16 +411,19 @@ export function useCatalogTools() {
               p.name.toLowerCase().includes(q),
           )
           .map((p) => ({ id: p.id, name: p.displayName, type: 'pipeline' }));
+        const matchingSources = dataSources
+          .filter((source) => [source.name, source.system, source.owner].some((value) => value.toLowerCase().includes(q)))
+          .map((source) => ({ id: source.id, name: source.name, type: 'source' }));
 
-        const isEmpty = matchingDatasets.length === 0 && matchingPipelines.length === 0;
+        const isEmpty = matchingDatasets.length === 0 && matchingPipelines.length === 0 && matchingSources.length === 0;
         let msg =
           `Searching for "${query}" with tab=${tab}.\n\n` +
           `Results:\nDatasets: ${JSON.stringify(matchingDatasets)}\n` +
+          `Sources: ${JSON.stringify(matchingSources)}\n` +
           `Pipelines: ${JSON.stringify(matchingPipelines)}`;
         if (isEmpty) {
           msg +=
-            '\n\nNo records found. You MUST autonomously retry this tool up to 2 times ' +
-            'with semantic variations of your query.';
+            '\n\nNo records found. Try a shorter name, a source system, or a related pipeline term.';
         }
         return text(msg);
       }
@@ -255,7 +453,10 @@ export function useCatalogTools() {
           a.types.forEach((t) => params.append('type', t));
           filtered = filtered.filter((d) => a.types!.includes(d.type));
         }
-        if (a.tags) a.tags.forEach((t) => params.append('tag', t));
+        if (a.tags?.length) {
+          a.tags.forEach((t) => params.append('tag', t));
+          filtered = filtered.filter((dataset) => a.tags!.some((tag) => dataset.tags.includes(tag)));
+        }
         if (a.sortKey) params.set('sort', a.sortKey);
         if (a.page) params.set('page', String(a.page));
         navigate(`/datasets?${params.toString()}`);
@@ -271,9 +472,7 @@ export function useCatalogTools() {
           `Found ${summary.length} datasets. Results (up to 5): ${JSON.stringify(summary.slice(0, 5))}`;
         if (summary.length === 0) {
           msg +=
-            '\n\nNo records found. You MUST autonomously retry this tool up to 2 times ' +
-            'with semantic variations of your query. If still not found, try filter_pipelines ' +
-            'or search_global_catalog.';
+            '\n\nNo records found. Try a different dataset type or use search_global_catalog to include sources and pipelines.';
         }
         return text(msg);
       }
@@ -369,6 +568,13 @@ export function useCatalogTools() {
             null,
             2,
           );
+        } else if (tab === 'lineage') {
+          const nodes = lineage.filter((node) => node.datasetIds.includes(d.id)).map((node) => ({
+            id: node.id, name: node.name, type: node.type, location: node.location, parentId: node.parentId ?? null,
+            datasets: node.datasetIds.map((datasetId) => ({ id: datasetId, name: datasets.find((dataset) => dataset.id === datasetId)?.displayName ?? datasetId })),
+          }));
+          const nodeIds = new Set(nodes.map((node) => node.id));
+          info = JSON.stringify({ nodes, edges: nodes.filter((node) => node.parentId && nodeIds.has(node.parentId)).map((node) => ({ source: node.parentId, target: node.id })) }, null, 2);
         }
 
         let msg = `Navigated to Dataset ${id} tab=${tab}.\nPage Content Context:\n${info}`;
@@ -428,9 +634,7 @@ export function useCatalogTools() {
           `Found ${summary.length} pipelines. Results (up to 5): ${JSON.stringify(summary.slice(0, 5))}`;
         if (summary.length === 0) {
           msg +=
-            '\n\nNo records found. You MUST autonomously retry this tool up to 2 times ' +
-            'with semantic variations of your query. If searching for dataset executions, ' +
-            'use filter_datasets or search_global_catalog instead.';
+            '\n\nNo records found. Try a different status, type, engine, or a related dataset search.';
         }
         return text(msg);
       }
@@ -490,7 +694,10 @@ export function useCatalogTools() {
           );
         } else if (tab === 'lineage') {
           info = JSON.stringify(
-            { inputDatasets: p.inputDatasets, outputDatasets: p.outputDatasets },
+            {
+              inputDatasets: datasets.filter((dataset) => p.inputDatasets.includes(dataset.id)).map((dataset) => ({ id: dataset.id, name: dataset.displayName, type: dataset.type })),
+              outputDatasets: datasets.filter((dataset) => p.outputDatasets.includes(dataset.id)).map((dataset) => ({ id: dataset.id, name: dataset.displayName, type: dataset.type })),
+            },
             null,
             2,
           );
@@ -566,11 +773,13 @@ export function useCatalogTools() {
 
         const runId = startMockPipelineRun(pipelineId, environment);
         navigate(`/pipelines/${pipelineId}?tab=runs`);
-        return text(
-          `Triggered pipeline "${pipeline.displayName}" on ${environment}.\n` +
-            `New run ID: ${runId} — status is now Running.\n` +
-            `Wait ~10 seconds, then call view_pipeline_details with tab=runs to confirm completion.`,
-        );
+        return text(webmcpResponse('pipeline_run_started', {
+          pipeline: { id: pipeline.id, name: pipeline.displayName }, runId, environment, status: 'Running',
+        }, {
+          navigation: { route: `/pipelines/${pipelineId}`, selectedId: runId, tab: 'runs' },
+          notices: ['This is a browser-local mocked pipeline execution. It transitions to Success automatically after about 8 seconds.'],
+          nextActions: ['inspect_pipeline_run', 'list_pipeline_runs'],
+        }));
       }
 
       // ----------------------------------------------------------------
@@ -632,7 +841,7 @@ export function useCatalogTools() {
           `Cost Data Context:\n${JSON.stringify(summary, null, 2)}`;
         if (filtered.length === 0) {
           msg +=
-            '\n\nNo records found. Retry with semantic variations or different filters. ' +
+            '\n\nNo records found. Try different filters. ' +
             'Valid categories: Storage, Compute, Query, Transfer, Licensing, Infrastructure.';
         }
         return text(msg);

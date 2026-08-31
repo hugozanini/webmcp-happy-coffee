@@ -72,6 +72,8 @@ describe('development WebMCP tools', () => {
         'create_development_sql_cell', 'update_development_sql_cell', 'delete_development_sql_cell',
         'run_development_sql_cell', 'run_duckdb_sql', 'create_workspace_table',
         'prepare_table_publication', 'open_table_publishing', 'reset_development_workspace',
+        'get_development_workspace_status', 'describe_development_table', 'preview_development_table',
+        'set_development_view',
       ]));
       expect(new Set(names).size).toBe(names.length);
     });
@@ -84,7 +86,7 @@ describe('development WebMCP tools', () => {
       for (const name of [
         'create_development_notebook', 'select_development_notebook', 'close_development_notebook',
         'create_development_sql_cell', 'update_development_sql_cell', 'delete_development_sql_cell',
-        'run_development_sql_cell', 'prepare_table_publication', 'reset_development_workspace',
+        'run_development_sql_cell', 'prepare_table_publication', 'reset_development_workspace', 'set_development_view',
       ]) {
         expect(byName[name]).toBe(false);
       }
@@ -302,6 +304,21 @@ describe('development WebMCP tools', () => {
       expect(navigate).toHaveBeenCalledWith('/develop');
       expect(lastAction()).toEqual({ type: 'reset-workspace' });
       expect(output).toContain('removed ephemeral published bundles');
+    });
+  });
+
+  describe('view controls', () => {
+    it('forwards view preferences without inferring visual state', async () => {
+      respond({ ok: true, message: 'Updated development workspace view.' });
+
+      const output = JSON.parse(await tool('set_development_view').execute({
+        bottomTab: 'publishing', explorerCollapsed: true, bottomPanelOpen: false, bottomPanelHeight: 420,
+      }));
+
+      expect(lastAction()).toEqual({
+        type: 'set-view', bottomTab: 'publishing', explorerCollapsed: true, bottomPanelOpen: false, bottomPanelHeight: 420,
+      });
+      expect(output).toMatchObject({ kind: 'development_view', data: { applied: true } });
     });
   });
 

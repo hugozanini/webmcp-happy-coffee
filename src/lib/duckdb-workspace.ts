@@ -51,6 +51,13 @@ function validateIdentifier(name: string, label: string): string {
   return name;
 }
 
+function validateSchema(name: string): 'happy_coffee' | 'workspace' {
+  if (name !== 'happy_coffee' && name !== 'workspace') {
+    throw new Error('Schema must be happy_coffee or workspace.');
+  }
+  return name;
+}
+
 class DuckDBWorkspace {
   private db: duckdb.AsyncDuckDB | null = null;
   private connection: duckdb.AsyncDuckDBConnection | null = null;
@@ -147,6 +154,32 @@ class DuckDBWorkspace {
       name: String(row.name),
       type: String(row.type),
     }));
+  }
+
+  async describeTable(schema: string, name: string, datasets: Dataset[]) {
+    const tableSchema = validateSchema(schema);
+    const tableName = validateIdentifier(name, 'Table name');
+    const result = await this.run(
+      `SELECT column_name AS name, data_type AS type, is_nullable AS nullable, ordinal_position AS position
+       FROM information_schema.columns
+       WHERE table_schema = '${tableSchema}' AND table_name = '${tableName}'
+       ORDER BY ordinal_position`,
+      datasets,
+      { notify: false },
+    );
+    return result.rows;
+  }
+
+  async previewTable(schema: string, name: string, datasets: Dataset[], limit = 25, offset = 0) {
+    const tableSchema = validateSchema(schema);
+    const tableName = validateIdentifier(name, 'Table name');
+    const boundedLimit = Math.min(Math.max(1, Math.floor(limit)), MAX_RESULT_ROWS);
+    const boundedOffset = Math.max(0, Math.floor(offset));
+    return this.run(
+      `SELECT * FROM ${tableSchema}.${tableName} LIMIT ${boundedLimit} OFFSET ${boundedOffset}`,
+      datasets,
+      { notify: false },
+    );
   }
 
   async createTable(name: string, selectSql: string, datasets: Dataset[], source: WorkspaceRunOptions['source'] = 'user') {

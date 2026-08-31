@@ -55,7 +55,37 @@ const MSG_TEMPLATES_FAIL: Record<QualityEntry['checkType'], string[]> = {
 export function generateQualityChecks(count: number, datasets: Dataset[]): QualityEntry[] {
   const entries: QualityEntry[] = [];
 
-  for (let i = 0; i < count; i++) {
+  const addEntry = (dataset: Dataset, result: QualityEntry['result'], index: number) => {
+    const checkType = CHECK_TYPES[index % CHECK_TYPES.length];
+    const severity = result === 'Passed'
+      ? 'Info'
+      : result === 'Warning'
+        ? 'Warning'
+        : index % 2 === 0 ? 'Error' : 'Critical';
+    const messages = result === 'Passed' ? MSG_TEMPLATES_PASS[checkType] : MSG_TEMPLATES_FAIL[checkType];
+    entries.push({
+      id: faker.string.uuid(),
+      timestamp: faker.date.recent({ days: 30 }),
+      checkType,
+      severity,
+      datasetId: dataset.id,
+      datasetName: dataset.displayName,
+      message: faker.helpers.arrayElement(messages),
+      rule: faker.helpers.arrayElement(RULES_BY_TYPE[checkType]),
+      result,
+      metadata: {
+        executionTimeMs: faker.number.int({ min: 50, max: 5000 }),
+        engine: faker.helpers.arrayElement(['dbt test', 'Great Expectations', 'Soda', 'Custom SQL']),
+      },
+    });
+  };
+
+  // Make catalog exploration reliable: every dataset has both a passing result
+  // and a non-passing result whenever the requested count has room for them.
+  for (let i = 0; i < datasets.length && entries.length < count; i++) addEntry(datasets[i], 'Passed', i);
+  for (let i = 0; i < datasets.length && entries.length < count; i++) addEntry(datasets[i], i % 2 === 0 ? 'Warning' : 'Failed', i + datasets.length);
+
+  for (let i = entries.length; i < count; i++) {
     const checkType = faker.helpers.arrayElement(CHECK_TYPES);
     const result = faker.helpers.weightedArrayElement([
       { value: 'Passed' as const, weight: 0.65 },
@@ -73,21 +103,7 @@ export function generateQualityChecks(count: number, datasets: Dataset[]): Quali
       ? MSG_TEMPLATES_PASS[checkType]
       : MSG_TEMPLATES_FAIL[checkType];
 
-    entries.push({
-      id: faker.string.uuid(),
-      timestamp: faker.date.recent({ days: 30 }),
-      checkType,
-      severity,
-      datasetId: dataset.id,
-      datasetName: dataset.displayName,
-      message: faker.helpers.arrayElement(messages),
-      rule: faker.helpers.arrayElement(RULES_BY_TYPE[checkType]),
-      result,
-      metadata: {
-        executionTimeMs: faker.number.int({ min: 50, max: 5000 }),
-        engine: faker.helpers.arrayElement(['dbt test', 'Great Expectations', 'Soda', 'Custom SQL']),
-      },
-    });
+    entries.push({ id: faker.string.uuid(), timestamp: faker.date.recent({ days: 30 }), checkType, severity, datasetId: dataset.id, datasetName: dataset.displayName, message: faker.helpers.arrayElement(messages), rule: faker.helpers.arrayElement(RULES_BY_TYPE[checkType]), result, metadata: { executionTimeMs: faker.number.int({ min: 50, max: 5000 }), engine: faker.helpers.arrayElement(['dbt test', 'Great Expectations', 'Soda', 'Custom SQL']) } });
   }
 
   return entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());

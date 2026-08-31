@@ -26,9 +26,13 @@ describe('WebMCPIntegration', () => {
         (useNavigate as any).mockReturnValue(mockNavigate);
 
         (useCatalogData as any).mockReturnValue({
-            datasets: [{ id: 'ds-1', name: 'mock_dataset', displayName: 'Mock Dataset', type: 'dbt', owner: 'Test', schema: { fields: [] }, sampleData: [], qualityScore: 90 }],
+            initialized: true,
+            datasets: [{ id: 'ds-1', name: 'mock_dataset', displayName: 'Mock Dataset', type: 'Table', owner: 'Test', source: 'Mock source', schema: { database: 'demo', schema: 'public' }, fields: [{ name: 'amount' }], sampleData: [{ amount: 42 }], qualityScore: 90 }],
+            dataSources: [{ id: 'source-1', name: 'Mock source', system: 'MockDB', owner: 'Test', type: 'Database', connectionStatus: 'Connected' }],
+            lineage: [{ id: 'lineage-1', name: 'Bronze mock', type: 'Bronze', datasetIds: ['ds-1'], location: 'demo.public', metadata: {} }],
             pipelines: [{ id: 'p-1', name: 'mock_pipeline', displayName: 'Mock Pipeline', inputDatasets: [], outputDatasets: ['ds-1'] }],
             pipelineRuns: [{ pipelineId: 'p-1', id: 'run-1', logs: [{ message: 'Test Log' }] }],
+            qualityChecks: [{ id: 'check-1', datasetId: 'ds-1', datasetName: 'Mock Dataset', checkType: 'Schema', result: 'Passed', severity: 'Info', message: 'Schema matches', rule: 'type check', timestamp: new Date().toISOString(), metadata: {} }],
             costs: [{ id: 'c-1', category: 'Compute', subcategory: 'Snowflake Warehouse Credits', entityType: 'Pipeline', entityId: 'p-1', amount: 150.50, currency: 'USD', date: new Date().toISOString(), description: 'Compute cost' }],
         });
 
@@ -57,14 +61,14 @@ describe('WebMCPIntegration', () => {
         consoleSpy.mockRestore();
     });
 
-  it('registers 24 tools when mounted', () => {
+  it('registers 38 tools when mounted', () => {
         render(
             <MemoryRouter>
                 <WebMCPIntegration />
             </MemoryRouter>
         );
 
-        expect(modelContextMock.registerTool).toHaveBeenCalledTimes(24);
+        expect(modelContextMock.registerTool).toHaveBeenCalledTimes(38);
         expect(modelContextMock.registerTool.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
         const triggerTool = modelContextMock.registerTool.mock.calls
             .map(([tool]: [any]) => tool)
@@ -87,6 +91,45 @@ describe('WebMCPIntegration', () => {
             const tools = modelContextMock.registerTool.mock.calls.map(([tool]: [any]) => tool);
             return tools.find((tool: any) => tool.name === name);
         };
+
+        it('returns a versioned portal snapshot without requiring UI inspection', async () => {
+            const tool = getTool('get_portal_snapshot');
+
+            const result = JSON.parse(await tool.execute({}));
+
+            expect(result).toMatchObject({
+                schemaVersion: '1.0', kind: 'portal_snapshot', ok: true,
+                data: { counts: { datasets: 1, dataSources: 1, qualityChecks: 1 } },
+            });
+            expect(result.data.routes).toEqual(expect.arrayContaining([
+                expect.objectContaining({ path: '/develop' }),
+                expect.objectContaining({ path: '/sources' }),
+            ]));
+            expect(result.nextActions).toContain('inspect_development_workspace');
+        });
+
+        it('returns source, quality, lineage, and dataset-preview data as structured contracts', async () => {
+            const sources = JSON.parse(await getTool('list_data_sources').execute({}));
+            expect(sources).toMatchObject({ kind: 'data_source_list', data: { total: 1 } });
+            expect(sources.data.sources[0].linkedDatasetIds).toEqual(['ds-1']);
+
+            const quality = JSON.parse(await getTool('list_quality_checks').execute({ datasetId: 'ds-1' }));
+            expect(quality).toMatchObject({ kind: 'quality_check_list', data: { total: 1 } });
+
+            const lineage = JSON.parse(await getTool('get_dataset_lineage').execute({ datasetId: 'ds-1' }));
+            expect(lineage.data.nodes[0]).toMatchObject({ name: 'Bronze mock' });
+
+            const preview = JSON.parse(await getTool('preview_dataset_data').execute({ id: 'ds-1', columns: ['amount'] }));
+            expect(preview).toMatchObject({ kind: 'dataset_preview', data: { rows: [{ amount: 42 }] } });
+        });
+
+        it('returns bounded pipeline and cost operations as structured contracts', async () => {
+            const runs = JSON.parse(await getTool('list_pipeline_runs').execute({ pipelineId: 'p-1' }));
+            expect(runs).toMatchObject({ kind: 'pipeline_run_list', data: { total: 1, runs: [{ id: 'run-1' }] } });
+
+            const costs = JSON.parse(await getTool('list_cost_entries').execute({ entityType: 'Pipeline' }));
+            expect(costs).toMatchObject({ kind: 'cost_entry_list', data: { total: 1, totalAmount: 150.5 } });
+        });
 
         it('view_home_dashboard navigates correctly', async () => {
             const tool = getTool('view_home_dashboard');

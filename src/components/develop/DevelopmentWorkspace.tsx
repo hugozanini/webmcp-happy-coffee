@@ -69,6 +69,13 @@ const softSqlTheme = EditorView.theme({
 const DEFAULT_OUTPUT_PANEL_HEIGHT = 'h-[42%] min-h-[190px]';
 const MIN_OUTPUT_PANEL_HEIGHT = 190;
 const MIN_EDITOR_HEIGHT = 240;
+const OUTPUT_PANEL_HEIGHT_STORAGE_KEY = 'happy-coffee:develop-output-panel-height';
+
+function readSavedOutputPanelHeight(): number | null {
+  if (typeof window === 'undefined') return null;
+  const value = Number(window.sessionStorage.getItem(OUTPUT_PANEL_HEIGHT_STORAGE_KEY));
+  return Number.isFinite(value) && value >= MIN_OUTPUT_PANEL_HEIGHT ? value : null;
+}
 
 function makeCell(sql = '', kind: Cell['kind'] = 'query', id?: string): Cell {
   return {
@@ -187,7 +194,7 @@ export function DevelopmentWorkspace() {
   const [resultSearch, setResultSearch] = useState('');
   const [bottomTab, setBottomTab, bottomTabRef] = useLiveState<BottomTab>('results');
   const [bottomPanelOpen, setBottomPanelOpen] = useState(true);
-  const [bottomPanelHeight, setBottomPanelHeight] = useState<number | null>(null);
+  const [bottomPanelHeight, setBottomPanelHeight] = useState<number | null>(readSavedOutputPanelHeight);
   const outputPanelRef = useRef<HTMLElement>(null);
   const resizeCleanupRef = useRef<(() => void) | null>(null);
   const [publishing, setPublishing] = useState(false);
@@ -203,6 +210,12 @@ export function DevelopmentWorkspace() {
 
   useEffect(() => () => resizeCleanupRef.current?.(), []);
 
+  const setPreferredOutputPanelHeight = useCallback((height: number) => {
+    const preferredHeight = Math.max(MIN_OUTPUT_PANEL_HEIGHT, Math.round(height));
+    setBottomPanelHeight(preferredHeight);
+    window.sessionStorage.setItem(OUTPUT_PANEL_HEIGHT_STORAGE_KEY, String(preferredHeight));
+  }, []);
+
   const startOutputPanelResize = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     resizeCleanupRef.current?.();
@@ -216,7 +229,7 @@ export function DevelopmentWorkspace() {
     const maximumHeight = Math.max(MIN_OUTPUT_PANEL_HEIGHT, workspace.getBoundingClientRect().height - MIN_EDITOR_HEIGHT);
     const resize = (moveEvent: PointerEvent) => {
       const nextHeight = Math.min(maximumHeight, Math.max(MIN_OUTPUT_PANEL_HEIGHT, startHeight + startY - moveEvent.clientY));
-      setBottomPanelHeight(Math.round(nextHeight));
+      setPreferredOutputPanelHeight(nextHeight);
     };
     const stop = () => {
       window.removeEventListener('pointermove', resize);
@@ -229,7 +242,7 @@ export function DevelopmentWorkspace() {
     window.addEventListener('pointerup', stop);
     window.addEventListener('pointercancel', stop);
     resizeCleanupRef.current = stop;
-  }, []);
+  }, [setPreferredOutputPanelHeight]);
 
   const activeNotebook = notebooks.find((notebook) => notebook.id === activeNotebookId) ?? notebooks[0];
   const activeCell = activeNotebook.cells.find((cell) => cell.id === activeCellId) ?? activeNotebook.cells[0];
@@ -680,7 +693,7 @@ export function DevelopmentWorkspace() {
           if (action.bottomTab) setBottomTab(action.bottomTab);
           if (action.explorerCollapsed !== undefined) setExplorerCollapsed(action.explorerCollapsed);
           if (action.bottomPanelOpen !== undefined) setBottomPanelOpen(action.bottomPanelOpen);
-          if (action.bottomPanelHeight !== undefined) setBottomPanelHeight(Math.max(MIN_OUTPUT_PANEL_HEIGHT, action.bottomPanelHeight));
+          if (action.bottomPanelHeight !== undefined) setPreferredOutputPanelHeight(action.bottomPanelHeight);
           return respond('Updated development workspace view.');
         default:
           return fail('Unsupported development workspace action.');
@@ -690,7 +703,7 @@ export function DevelopmentWorkspace() {
   }, [
     activeCellIdRef, activeNotebookIdRef, bottomPanelHeight, bottomPanelOpen, bottomTabRef, draftRef, executeCell, expiresAtRef, notebooksRef,
     publishedDatasetIdRef, resetSession, setActiveCellId, setActiveNotebookId, setBottomTab, setDraft,
-    setExplorerCollapsed, setNotebooks, setPublicationError, statusRef, tablesRef, updateCellInNotebook,
+    setExplorerCollapsed, setNotebooks, setPreferredOutputPanelHeight, setPublicationError, statusRef, tablesRef, updateCellInNotebook,
   ]);
 
   return (

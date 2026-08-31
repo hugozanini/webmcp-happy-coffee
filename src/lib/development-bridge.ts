@@ -84,3 +84,7 @@ export function registerDevelopmentActionHandler(nextHandler: Handler) {
     if (handler === nextHandler) handler = null;
   };
 }
+
+export function hasDevelopmentActionHandler() {
+  return handler !== null;
+}

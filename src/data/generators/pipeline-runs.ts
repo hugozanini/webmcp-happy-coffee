@@ -90,16 +90,30 @@ function generateRunLogs(status: PipelineRun['status'], pipelineName: string, du
 }
 
 export function generatePipelines(datasetIds: string[]): Pipeline[] {
+  const inventoryId = datasetIds[0];
+  const warehouseStockId = datasetIds[7] ?? datasetIds[0];
+
   return PIPELINE_DEFS.map((def) => {
     const id = faker.string.uuid();
     const hasCron = def.cron !== null;
-    const lastRunStatus: Pipeline['lastRunStatus'] = faker.helpers.weightedArrayElement([
+    let lastRunStatus: Pipeline['lastRunStatus'] = faker.helpers.weightedArrayElement([
       { value: 'Success' as const, weight: 0.75 },
       { value: 'Failed' as const, weight: 0.15 },
       { value: 'Running' as const, weight: 0.05 },
       { value: 'Cancelled' as const, weight: 0.05 },
     ]);
+    // Keep every status filter demonstrable in the generated portal. This also
+    // makes it possible for agents to inspect a real failed-run example.
+    if (def.name === 'quality_check_schema_drift') lastRunStatus = 'Failed';
+    if (def.name === 'export_to_powerbi') lastRunStatus = 'Cancelled';
     const totalRuns = faker.number.int({ min: 15, max: 120 });
+
+    const inputDatasets = faker.helpers.arrayElements(datasetIds, { min: 1, max: 3 });
+    const outputDatasets = faker.helpers.arrayElements(datasetIds, { min: 1, max: 2 });
+    if (def.name === 'transform_inventory_silver' && inventoryId) {
+      inputDatasets.splice(0, inputDatasets.length, inventoryId);
+      outputDatasets.splice(0, outputDatasets.length, warehouseStockId);
+    }
 
     return {
       id,
@@ -121,8 +135,8 @@ export function generatePipelines(datasetIds: string[]): Pipeline[] {
       } : null,
       engine: def.engine,
       cluster: faker.helpers.arrayElement(CLUSTERS),
-      inputDatasets: faker.helpers.arrayElements(datasetIds, { min: 1, max: 3 }),
-      outputDatasets: faker.helpers.arrayElements(datasetIds, { min: 1, max: 2 }),
+      inputDatasets,
+      outputDatasets,
       tags: def.tags,
       createdAt: faker.date.past({ years: 1 }),
       lastRunStatus,

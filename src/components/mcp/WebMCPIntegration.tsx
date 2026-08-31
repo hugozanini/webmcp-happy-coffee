@@ -44,6 +44,91 @@ export function WebMCPIntegration() {
     const registration = new AbortController();
     const tools: ToolDefinition[] = [
         {
+          name: 'get_portal_snapshot',
+          description: 'Get a versioned, screen-independent map of the Happy Coffee portal: routes, generated-data counts, safeguards, and recommended next actions. Call this first to understand the portal without scraping the UI.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('get_portal_snapshot', args),
+        },
+        {
+          name: 'list_data_sources',
+          description: 'List generated portal data sources with connection health and linked dataset IDs. Returns a versioned JSON contract; no visual inspection is required.',
+          inputSchema: { type: 'object', properties: { query: { type: 'string' }, statuses: { type: 'array', items: { type: 'string', enum: ['Connected', 'Degraded', 'Disconnected'] } } } },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('list_data_sources', args),
+        },
+        {
+          name: 'inspect_data_source',
+          description: 'Inspect one data source, its health metadata, and datasets linked to its system.',
+          inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('inspect_data_source', args),
+        },
+        {
+          name: 'list_quality_checks',
+          description: 'List generated quality-check executions by dataset, text, severity, result, or check type. Returns a versioned JSON contract.',
+          inputSchema: { type: 'object', properties: { datasetId: { type: 'string' }, query: { type: 'string' }, severities: { type: 'array', items: { type: 'string', enum: ['Info', 'Warning', 'Error', 'Critical'] } }, results: { type: 'array', items: { type: 'string', enum: ['Passed', 'Warning', 'Failed'] } }, checkTypes: { type: 'array', items: { type: 'string', enum: ['Freshness', 'Schema', 'Volume', 'Accuracy', 'Completeness'] } }, limit: { type: 'number' } } },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('list_quality_checks', args),
+        },
+        {
+          name: 'inspect_quality_check',
+          description: 'Inspect one quality-check execution, including its rule, message, metadata, and related dataset.',
+          inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('inspect_quality_check', args),
+        },
+        {
+          name: 'get_dataset_lineage',
+          description: 'Return named lineage nodes and edges for a dataset without relying on the visual lineage graph.',
+          inputSchema: { type: 'object', properties: { datasetId: { type: 'string' } }, required: ['datasetId'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('get_dataset_lineage', args),
+        },
+        {
+          name: 'preview_dataset_data',
+          description: 'Return a bounded, column-selectable preview of generated dataset sample data.',
+          inputSchema: { type: 'object', properties: { id: { type: 'string' }, limit: { type: 'number' }, offset: { type: 'number' }, columns: { type: 'array', items: { type: 'string' } } }, required: ['id'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('preview_dataset_data', args),
+        },
+        {
+          name: 'list_pipeline_runs',
+          description: 'List pipeline runs with stable IDs, bounded pagination, statuses, and mock-environment context.',
+          inputSchema: { type: 'object', properties: { pipelineId: { type: 'string' }, statuses: { type: 'array', items: { type: 'string', enum: ['Success', 'Failed', 'Running', 'Cancelled'] } }, limit: { type: 'number' }, offset: { type: 'number' } } },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('list_pipeline_runs', args),
+        },
+        {
+          name: 'inspect_pipeline_run',
+          description: 'Inspect one pipeline run and its logs without relying on the expanded Runs UI.',
+          inputSchema: { type: 'object', properties: { pipelineId: { type: 'string' }, runId: { type: 'string' } }, required: ['pipelineId', 'runId'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('inspect_pipeline_run', args),
+        },
+        {
+          name: 'list_cost_entries',
+          description: 'List bounded, filterable infrastructure cost entries with totals and stable entity IDs.',
+          inputSchema: { type: 'object', properties: { dateRange: { type: 'string', enum: ['7', '15', '30', '60', '90'] }, category: { type: 'string', enum: ['Storage', 'Compute', 'Query', 'Transfer', 'Licensing', 'Infrastructure'] }, entityType: { type: 'string', enum: ['Dataset', 'Pipeline', 'Source'] }, entityId: { type: 'string' }, search: { type: 'string' }, limit: { type: 'number' }, offset: { type: 'number' } } },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('list_cost_entries', args),
+        },
+        {
+          name: 'get_development_workspace_status',
+          description: 'Start and inspect the browser-local DuckDB workspace without waiting for or scraping the UI. Returns session expiry and available tables.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('get_development_workspace_status', args),
+        },
+        {
+          name: 'describe_development_table',
+          description: 'Return the schema of a happy_coffee catalog table or workspace temporary table before writing SQL.',
+          inputSchema: { type: 'object', properties: { schema: { type: 'string', enum: ['happy_coffee', 'workspace'] }, name: { type: 'string' } }, required: ['schema', 'name'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('describe_development_table', args),
+        },
+        {
+          name: 'preview_development_table',
+          description: 'Return a bounded DuckDB table preview without needing to read the visible results grid.',
+          inputSchema: { type: 'object', properties: { schema: { type: 'string', enum: ['happy_coffee', 'workspace'] }, name: { type: 'string' }, limit: { type: 'number' }, offset: { type: 'number' } }, required: ['schema', 'name'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('preview_development_table', args),
+        },
+        {
+          name: 'set_development_view',
+          readOnlyHint: false,
+          description: 'Set the visible Develop workspace state for a user: Results or Table Publishing, explorer collapsed state, and output-panel visibility or pixel height.',
+          inputSchema: { type: 'object', properties: { bottomTab: { type: 'string', enum: ['results', 'publishing'] }, explorerCollapsed: { type: 'boolean' }, bottomPanelOpen: { type: 'boolean' }, bottomPanelHeight: { type: 'number' } } },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('set_development_view', args),
+        },
+        {
           name: 'open_development_workspace',
           description:
             'Open the Happy Coffee DuckDB development workspace and list the generated catalog tables available for SQL development. ' +
