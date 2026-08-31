@@ -27,12 +27,12 @@ describe('WebMCPIntegration', () => {
 
         (useCatalogData as any).mockReturnValue({
             initialized: true,
-            datasets: [{ id: 'ds-1', name: 'mock_dataset', displayName: 'Mock Dataset', type: 'dbt', owner: 'Test', schema: { fields: [] }, sampleData: [], qualityScore: 90 }],
-            dataSources: [{ id: 'source-1' }],
-            lineage: [{ id: 'lineage-1' }],
+            datasets: [{ id: 'ds-1', name: 'mock_dataset', displayName: 'Mock Dataset', type: 'Table', owner: 'Test', source: 'MockDB', schema: { database: 'demo', schema: 'public' }, fields: [{ name: 'amount' }], sampleData: [{ amount: 42 }], qualityScore: 90 }],
+            dataSources: [{ id: 'source-1', name: 'Mock source', system: 'MockDB', owner: 'Test', type: 'Database', connectionStatus: 'Connected' }],
+            lineage: [{ id: 'lineage-1', name: 'Bronze mock', type: 'Bronze', datasetIds: ['ds-1'], location: 'demo.public', metadata: {} }],
             pipelines: [{ id: 'p-1', name: 'mock_pipeline', displayName: 'Mock Pipeline', inputDatasets: [], outputDatasets: ['ds-1'] }],
             pipelineRuns: [{ pipelineId: 'p-1', id: 'run-1', logs: [{ message: 'Test Log' }] }],
-            qualityChecks: [{ id: 'check-1' }],
+            qualityChecks: [{ id: 'check-1', datasetId: 'ds-1', datasetName: 'Mock Dataset', checkType: 'Schema', result: 'Passed', severity: 'Info', message: 'Schema matches', rule: 'type check', timestamp: new Date().toISOString(), metadata: {} }],
             costs: [{ id: 'c-1', category: 'Compute', subcategory: 'Snowflake Warehouse Credits', entityType: 'Pipeline', entityId: 'p-1', amount: 150.50, currency: 'USD', date: new Date().toISOString(), description: 'Compute cost' }],
         });
 
@@ -61,14 +61,14 @@ describe('WebMCPIntegration', () => {
         consoleSpy.mockRestore();
     });
 
-  it('registers 25 tools when mounted', () => {
+  it('registers 31 tools when mounted', () => {
         render(
             <MemoryRouter>
                 <WebMCPIntegration />
             </MemoryRouter>
         );
 
-        expect(modelContextMock.registerTool).toHaveBeenCalledTimes(25);
+        expect(modelContextMock.registerTool).toHaveBeenCalledTimes(31);
         expect(modelContextMock.registerTool.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
         const triggerTool = modelContextMock.registerTool.mock.calls
             .map(([tool]: [any]) => tool)
@@ -106,6 +106,21 @@ describe('WebMCPIntegration', () => {
                 expect.objectContaining({ path: '/sources' }),
             ]));
             expect(result.nextActions).toContain('inspect_development_workspace');
+        });
+
+        it('returns source, quality, lineage, and dataset-preview data as structured contracts', async () => {
+            const sources = JSON.parse(await getTool('list_data_sources').execute({}));
+            expect(sources).toMatchObject({ kind: 'data_source_list', data: { total: 1 } });
+            expect(sources.data.sources[0].linkedDatasetIds).toEqual(['ds-1']);
+
+            const quality = JSON.parse(await getTool('list_quality_checks').execute({ datasetId: 'ds-1' }));
+            expect(quality).toMatchObject({ kind: 'quality_check_list', data: { total: 1 } });
+
+            const lineage = JSON.parse(await getTool('get_dataset_lineage').execute({ datasetId: 'ds-1' }));
+            expect(lineage.data.nodes[0]).toMatchObject({ name: 'Bronze mock' });
+
+            const preview = JSON.parse(await getTool('preview_dataset_data').execute({ id: 'ds-1', columns: ['amount'] }));
+            expect(preview).toMatchObject({ kind: 'dataset_preview', data: { rows: [{ amount: 42 }] } });
         });
 
         it('view_home_dashboard navigates correctly', async () => {

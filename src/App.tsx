@@ -9,6 +9,9 @@ import { Pipelines } from './components/catalog/Pipelines';
 import { PipelineDetail } from './components/catalog/PipelineDetail';
 import { Costs } from './components/catalog/Costs';
 import { SearchResults } from './components/catalog/SearchResults';
+import { Sources } from './components/catalog/Sources';
+import { Quality } from './components/catalog/Quality';
+import { Lineage } from './components/catalog/Lineage';
 import { WebMCPIntegration } from './components/mcp/WebMCPIntegration';
 
 const DevelopmentWorkspace = lazy(() =>
@@ -27,6 +30,9 @@ function App() {
             <Route path="/search" element={<SearchResults />} />
             <Route path="/datasets" element={<Datasets />} />
             <Route path="/datasets/:id" element={<DatasetDetail />} />
+            <Route path="/sources" element={<Sources />} />
+            <Route path="/quality" element={<Quality />} />
+            <Route path="/lineage" element={<Lineage />} />
             <Route path="/pipelines" element={<Pipelines />} />
             <Route path="/pipelines/:id" element={<PipelineDetail />} />
             <Route path="/costs" element={<Costs />} />

@@ -5,6 +5,8 @@ import {
   Database,
   Play,
   DollarSign,
+  ShieldCheck,
+  Network,
   TrendingUp,
   TrendingDown,
   PanelLeftClose,
@@ -18,6 +20,9 @@ import { Logo } from '../ui/Logo';
 const navItems = [
   { path: '/', label: 'Home', icon: Home },
   { path: '/datasets', label: 'Datasets', icon: Database, countKey: 'datasets' as const },
+  { path: '/sources', label: 'Sources', icon: Network, countKey: 'dataSources' as const },
+  { path: '/quality', label: 'Quality', icon: ShieldCheck, countKey: 'qualityChecks' as const },
+  { path: '/lineage', label: 'Lineage', icon: Network },
   { path: '/pipelines', label: 'Pipelines', icon: Play, countKey: 'pipelines' as const },
   { path: '/costs', label: 'Costs', icon: DollarSign },
   { path: '/develop', label: 'Develop', icon: Code2 },

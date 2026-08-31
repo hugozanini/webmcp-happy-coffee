@@ -66,6 +66,69 @@ export function useCatalogTools() {
       }
 
       // ----------------------------------------------------------------
+      case 'list_data_sources': {
+        const { query = '', statuses } = args as { query?: string; statuses?: string[] };
+        const q = query.toLowerCase();
+        const sources = dataSources.filter((source) =>
+          (!q || [source.name, source.system, source.owner, source.type].some((value) => value.toLowerCase().includes(q))) &&
+          (!statuses?.length || statuses.includes(source.connectionStatus)),
+        ).map((source) => ({ ...source, linkedDatasetIds: datasets.filter((dataset) => dataset.source === source.system).map((dataset) => dataset.id) }));
+        navigate(`/sources?${new URLSearchParams({ ...(query ? { q: query } : {}) }).toString()}`);
+        return text(webmcpResponse('data_source_list', { total: sources.length, sources }, { navigation: { route: '/sources' }, nextActions: ['inspect_data_source', 'filter_datasets'] }));
+      }
+
+      case 'inspect_data_source': {
+        const id = args['id'] as string;
+        const source = dataSources.find((item) => item.id === id);
+        if (!source) return text(webmcpResponse('data_source_detail', { id, found: false }, { navigation: { route: '/sources', selectedId: id } }));
+        const linkedDatasets = datasets.filter((dataset) => dataset.source === source.system).map((dataset) => ({ id: dataset.id, name: dataset.displayName, type: dataset.type, qualityScore: dataset.qualityScore }));
+        navigate(`/sources?source=${encodeURIComponent(id)}`);
+        return text(webmcpResponse('data_source_detail', { source, linkedDatasets }, { navigation: { route: '/sources', selectedId: id }, nextActions: ['view_dataset_details', 'get_dataset_lineage'] }));
+      }
+
+      case 'list_quality_checks': {
+        const { datasetId, query = '', severities, results, checkTypes, limit = 50 } = args as { datasetId?: string; query?: string; severities?: string[]; results?: string[]; checkTypes?: string[]; limit?: number };
+        const q = query.toLowerCase();
+        const checks = qualityChecks.filter((check) =>
+          (!datasetId || check.datasetId === datasetId) &&
+          (!q || [check.datasetName, check.message, check.rule].some((value) => value.toLowerCase().includes(q))) &&
+          (!severities?.length || severities.includes(check.severity)) &&
+          (!results?.length || results.includes(check.result)) &&
+          (!checkTypes?.length || checkTypes.includes(check.checkType)),
+        ).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        navigate(`/quality${datasetId ? `?dataset=${encodeURIComponent(datasetId)}` : ''}`);
+        return text(webmcpResponse('quality_check_list', { total: checks.length, checks: checks.slice(0, Math.min(Math.max(1, limit), 100)), truncated: checks.length > limit }, { navigation: { route: '/quality', selectedId: datasetId }, nextActions: ['inspect_quality_check', 'view_dataset_details'] }));
+      }
+
+      case 'inspect_quality_check': {
+        const id = args['id'] as string;
+        const check = qualityChecks.find((item) => item.id === id);
+        navigate(`/quality?check=${encodeURIComponent(id)}`);
+        return text(webmcpResponse('quality_check_detail', { found: Boolean(check), check: check ?? null, dataset: check ? datasets.find((dataset) => dataset.id === check.datasetId) : null }, { navigation: { route: '/quality', selectedId: id } }));
+      }
+
+      case 'get_dataset_lineage': {
+        const datasetId = args['datasetId'] as string;
+        const dataset = datasets.find((item) => item.id === datasetId);
+        const nodes = lineage.filter((node) => node.datasetIds.includes(datasetId)).map((node) => ({ ...node, datasets: node.datasetIds.map((id) => ({ id, name: datasets.find((item) => item.id === id)?.displayName ?? id })) }));
+        const nodeIds = new Set(nodes.map((node) => node.id));
+        const edges = nodes.filter((node) => node.parentId && nodeIds.has(node.parentId)).map((node) => ({ source: node.parentId!, target: node.id }));
+        navigate(`/lineage?dataset=${encodeURIComponent(datasetId)}`);
+        return text(webmcpResponse('dataset_lineage', { found: Boolean(dataset), dataset: dataset ? { id: dataset.id, name: dataset.displayName } : null, nodes, edges }, { navigation: { route: '/lineage', selectedId: datasetId }, nextActions: ['view_dataset_details', 'view_pipeline_details'] }));
+      }
+
+      case 'preview_dataset_data': {
+        const { id, limit = 25, offset = 0, columns } = args as { id: string; limit?: number; offset?: number; columns?: string[] };
+        const dataset = datasets.find((item) => item.id === id);
+        if (!dataset) return text(webmcpResponse('dataset_preview', { found: false, id }, { navigation: { route: '/datasets', selectedId: id } }));
+        const availableColumns = dataset.fields.map((field) => field.name);
+        const selectedColumns = columns?.length ? columns.filter((column) => availableColumns.includes(column)) : availableColumns;
+        const rows = dataset.sampleData.slice(Math.max(0, offset), Math.max(0, offset) + Math.min(Math.max(1, limit), 100)).map((row) => Object.fromEntries(selectedColumns.map((column) => [column, row[column]])));
+        navigate(`/datasets/${id}?tab=data`);
+        return text(webmcpResponse('dataset_preview', { dataset: { id: dataset.id, name: dataset.displayName }, columns: selectedColumns, offset, totalSampleRows: dataset.sampleData.length, rows }, { navigation: { route: `/datasets/${id}`, selectedId: id, tab: 'data' }, nextActions: ['view_dataset_details', 'get_dataset_lineage'] }));
+      }
+
+      // ----------------------------------------------------------------
       case 'open_development_workspace': {
         navigate('/develop');
         try {

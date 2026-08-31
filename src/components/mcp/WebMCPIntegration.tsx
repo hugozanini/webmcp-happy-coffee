@@ -50,6 +50,42 @@ export function WebMCPIntegration() {
           execute: (args: Record<string, unknown>) => executeToolRef.current('get_portal_snapshot', args),
         },
         {
+          name: 'list_data_sources',
+          description: 'List generated portal data sources with connection health and linked dataset IDs. Returns a versioned JSON contract; no visual inspection is required.',
+          inputSchema: { type: 'object', properties: { query: { type: 'string' }, statuses: { type: 'array', items: { type: 'string', enum: ['Connected', 'Degraded', 'Disconnected'] } } } },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('list_data_sources', args),
+        },
+        {
+          name: 'inspect_data_source',
+          description: 'Inspect one data source, its health metadata, and datasets linked to its system.',
+          inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('inspect_data_source', args),
+        },
+        {
+          name: 'list_quality_checks',
+          description: 'List generated quality-check executions by dataset, text, severity, result, or check type. Returns a versioned JSON contract.',
+          inputSchema: { type: 'object', properties: { datasetId: { type: 'string' }, query: { type: 'string' }, severities: { type: 'array', items: { type: 'string', enum: ['Info', 'Warning', 'Error', 'Critical'] } }, results: { type: 'array', items: { type: 'string', enum: ['Passed', 'Warning', 'Failed'] } }, checkTypes: { type: 'array', items: { type: 'string', enum: ['Freshness', 'Schema', 'Volume', 'Accuracy', 'Completeness'] } }, limit: { type: 'number' } } },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('list_quality_checks', args),
+        },
+        {
+          name: 'inspect_quality_check',
+          description: 'Inspect one quality-check execution, including its rule, message, metadata, and related dataset.',
+          inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('inspect_quality_check', args),
+        },
+        {
+          name: 'get_dataset_lineage',
+          description: 'Return named lineage nodes and edges for a dataset without relying on the visual lineage graph.',
+          inputSchema: { type: 'object', properties: { datasetId: { type: 'string' } }, required: ['datasetId'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('get_dataset_lineage', args),
+        },
+        {
+          name: 'preview_dataset_data',
+          description: 'Return a bounded, column-selectable preview of generated dataset sample data.',
+          inputSchema: { type: 'object', properties: { id: { type: 'string' }, limit: { type: 'number' }, offset: { type: 'number' }, columns: { type: 'array', items: { type: 'string' } } }, required: ['id'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('preview_dataset_data', args),
+        },
+        {
           name: 'open_development_workspace',
           description:
             'Open the Happy Coffee DuckDB development workspace and list the generated catalog tables available for SQL development. ' +
