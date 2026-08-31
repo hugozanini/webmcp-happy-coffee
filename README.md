@@ -18,12 +18,18 @@ Try the deployed portal at [webmcp-happy-coffee.pages.dev](https://webmcp-happy-
 
 The site is deployed on Cloudflare Pages from the `main` branch. The portal works in any modern browser; WebMCP tools are available when the visiting AI/browser host supports `document.modelContext`.
 
+## Why WebMCP
+
+Happy Coffee is an example of how WebMCP can accelerate developer productivity. Instead of making people navigate every data-development task by hand, an AI agent can understand the portal, explore the catalog, write and run SQL, create quality checks, prepare a data product, and operate the mock pipeline workflow through structured WebMCP tools.
+
+The portal keeps the work visible and understandable. While the agent does the implementation, people can follow the same journey through sample data, query results, schema details, lineage, quality-check outcomes, and mocked staging executions. Publishing remains an intentional human decision: the agent can prepare the table and its metadata, but a person must click **Publish table**.
+
 ## What it demonstrates
 
 - A React data developer portal with realistic mock assets and operational metrics.
-- WebMCP tools for portal search, dataset inspection, pipeline inspection, logs, and cost analysis.
+- WebMCP tools for autonomous portal navigation, catalog search, dataset inspection, lineage, pipeline inspection, logs, and cost analysis.
 - A browser-local DuckDB development workspace with a SQL notebook, result grid, and data explorer.
-- WebMCP tools that let an AI agent open the workspace, inspect available tables, run DuckDB SQL, and create temporary derived tables while the user follows along in the UI.
+- WebMCP tools that let an AI agent develop queries, temporary derived tables, and quality checks while the user follows visible feedback in the UI.
 
 ## DuckDB development workspace
 
