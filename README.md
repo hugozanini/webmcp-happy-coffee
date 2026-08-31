@@ -20,9 +20,9 @@ The site is deployed on Cloudflare Pages from the `main` branch. The portal work
 
 ## Why WebMCP
 
-Happy Coffee is an example of how WebMCP can accelerate developer productivity. Instead of making people navigate every data-development task by hand, an AI agent can understand the portal, explore the catalog, write and run SQL, create quality checks, prepare a data product, and operate the mock pipeline workflow through structured WebMCP tools.
+Happy Coffee is an example of how WebMCP can accelerate developer productivity. Instead of making people navigate every data-development task by hand, an AI agent can understand the portal, explore the catalog, write and run SQL, create quality checks, prepare a data product, and operate a data pipeline workflow through structured WebMCP tools.
 
-The portal keeps the work visible and understandable. While the agent does the implementation, people can follow the same journey through sample data, query results, schema details, lineage, quality-check outcomes, and mocked staging executions. Publishing remains an intentional human decision: the agent can prepare the table and its metadata, but a person must click **Publish table**.
+The portal keeps the work visible and understandable. While the agent does the implementation, people can follow the same journey through sample data, query results, schema details, lineage, quality-check outcomes, and executions logs. Publishing remains an intentional human decision: the agent can prepare the table and its metadata, but a person must click **Publish table**.
 
 ## What it demonstrates
 
