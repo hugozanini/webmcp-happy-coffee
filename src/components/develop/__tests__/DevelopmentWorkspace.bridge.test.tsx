@@ -69,6 +69,8 @@ type InspectState = {
   activeNotebookId: string;
   activeCellId: string;
   bottomTab: string;
+  bottomPanelOpen: boolean;
+  bottomPanelHeight: number | null;
   notebooks: {
     id: string;
     name: string;
@@ -141,6 +143,8 @@ describe('DevelopmentWorkspace WebMCP bridge', () => {
 
       expect(state.status).toBe('ready');
       expect(state.bottomTab).toBe('results');
+      expect(state.bottomPanelOpen).toBe(true);
+      expect(state.bottomPanelHeight).toBeNull();
       expect(state.notebooks).toHaveLength(1);
       expect(state.notebooks[0].name).toBe('Inventory analysis');
       expect(state.notebooks[0].cells[0]).toMatchObject({ index: 1, kind: 'query' });
@@ -530,6 +534,23 @@ describe('DevelopmentWorkspace WebMCP bridge', () => {
 
       await send({ type: 'set-view', bottomTab: 'results' });
       expect((await inspect()).bottomTab).toBe('results');
+    });
+
+    it('opens, closes, and sets a custom output-panel height', async () => {
+      await renderWorkspace();
+
+      await send({ type: 'set-view', bottomPanelHeight: 510 });
+      expect((await inspect()).bottomPanelHeight).toBe(510);
+
+      await send({ type: 'set-view', bottomPanelOpen: false });
+      expect((await inspect()).bottomPanelOpen).toBe(false);
+      expect(await screen.findByRole('button', { name: 'Open output panel' })).toBeInTheDocument();
+
+      await send({ type: 'set-view', bottomPanelOpen: true, bottomPanelHeight: 240 });
+      const state = await inspect();
+      expect(state.bottomPanelOpen).toBe(true);
+      expect(state.bottomPanelHeight).toBe(240);
+      expect(await screen.findByRole('button', { name: 'Close output panel' })).toBeInTheDocument();
     });
 
     it('collapses and expands the table explorer', async () => {
