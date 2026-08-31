@@ -49,7 +49,3 @@ npm run lint
 npm run test:run
 npm run build
 ```
-
-## Hosted-demo deployment
-
-The application loads DuckDB-Wasm’s official browser-selected bundle from jsDelivr at runtime. This avoids Cloudflare Pages’ 25 MiB per-static-asset limit while keeping query execution in the browser. For the hosted demo, deploy it as a Cloudflare Pages site: pull requests receive preview builds, and merges to `main` automatically deploy the production site. Cross-origin isolation is optional; without it DuckDB-Wasm runs safely in a single worker thread, which is sufficient for this mock-data demo.
