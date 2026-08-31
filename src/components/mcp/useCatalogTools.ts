@@ -406,11 +406,15 @@ export function useCatalogTools() {
               p.name.toLowerCase().includes(q),
           )
           .map((p) => ({ id: p.id, name: p.displayName, type: 'pipeline' }));
+        const matchingSources = dataSources
+          .filter((source) => [source.name, source.system, source.owner].some((value) => value.toLowerCase().includes(q)))
+          .map((source) => ({ id: source.id, name: source.name, type: 'source' }));
 
-        const isEmpty = matchingDatasets.length === 0 && matchingPipelines.length === 0;
+        const isEmpty = matchingDatasets.length === 0 && matchingPipelines.length === 0 && matchingSources.length === 0;
         let msg =
           `Searching for "${query}" with tab=${tab}.\n\n` +
           `Results:\nDatasets: ${JSON.stringify(matchingDatasets)}\n` +
+          `Sources: ${JSON.stringify(matchingSources)}\n` +
           `Pipelines: ${JSON.stringify(matchingPipelines)}`;
         if (isEmpty) {
           msg +=

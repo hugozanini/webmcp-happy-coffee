@@ -44,7 +44,7 @@ export function SearchResults() {
     dataSources.forEach((s) => rows.push({
       id: s.id, type: 'Source', name: s.name,
       meta: `${s.system} -- ${s.connectionStatus} -- ${s.datasetsCount} datasets`,
-      link: '/datasets',
+      link: `/sources?source=${s.id}`,
     }));
     pipelines.forEach((p) => rows.push({
       id: p.id, type: 'Pipeline', name: p.displayName,

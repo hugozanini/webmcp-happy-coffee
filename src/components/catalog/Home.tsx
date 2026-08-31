@@ -55,7 +55,7 @@ export function Home() {
       dataSources.forEach((s) => rows.push({
         id: s.id, type: 'Source', name: s.name,
         meta: `${s.system} -- ${s.connectionStatus} -- ${s.datasetsCount} datasets`,
-        link: '/datasets',
+        link: `/sources?source=${s.id}`,
       }));
     }
     if (activeTab === 'all' || activeTab === 'pipelines') {

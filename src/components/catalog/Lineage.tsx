@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   ReactFlow,
   Background,
@@ -74,8 +75,9 @@ function layoutGraph(nodes: Node[], edges: Edge[]) {
 export function Lineage() {
   const { lineage, datasets } = useCatalogData();
   useDocumentTitle('Lineage');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
-  const [selectedDataset, setSelectedDataset] = useState<string | null>(null);
+  const selectedDataset = searchParams.get('dataset');
 
   const datasetOptions = useMemo(() => {
     const dsIds = new Set<string>();
@@ -149,7 +151,7 @@ export function Lineage() {
 
       <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1 scrollbar-thin">
         <button
-          onClick={() => setSelectedDataset(null)}
+          onClick={() => setSearchParams({})}
           className={clsx(
             'px-3 py-1.5 text-xs font-medium rounded-full border transition-colors',
             !selectedDataset
@@ -162,7 +164,7 @@ export function Lineage() {
         {filteredDatasets.slice(0, 15).map((d) => (
           <button
             key={d.id}
-            onClick={() => setSelectedDataset(d.id)}
+            onClick={() => setSearchParams({ dataset: d.id })}
             className={clsx(
               'px-3 py-1.5 text-xs font-medium rounded-full border transition-colors',
               selectedDataset === d.id
