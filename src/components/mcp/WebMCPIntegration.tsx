@@ -44,6 +44,12 @@ export function WebMCPIntegration() {
     const registration = new AbortController();
     const tools: ToolDefinition[] = [
         {
+          name: 'get_portal_snapshot',
+          description: 'Get a versioned, screen-independent map of the Happy Coffee portal: routes, generated-data counts, safeguards, and recommended next actions. Call this first to understand the portal without scraping the UI.',
+          inputSchema: { type: 'object', properties: {} },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('get_portal_snapshot', args),
+        },
+        {
           name: 'open_development_workspace',
           description:
             'Open the Happy Coffee DuckDB development workspace and list the generated catalog tables available for SQL development. ' +

@@ -11,6 +11,7 @@ export function useCatalogData() {
   }, [store.initialized, store]);
 
   return {
+    initialized: store.initialized,
     datasets: store.datasets,
     dataSources: store.dataSources,
     lineage: store.lineage,

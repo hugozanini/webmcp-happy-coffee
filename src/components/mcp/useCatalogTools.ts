@@ -1,7 +1,8 @@
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useCatalogData } from '../../hooks/useCatalogData';
 import { useCatalogStore } from '../../store/catalog-store';
 import { requestDevelopmentAction } from '../../lib/development-bridge';
+import { webmcpResponse } from '../../lib/webmcp-contract';
 
 // ------------------------------------------------------------------
 // Shared execution logic for the WebMCP catalog tools.
@@ -15,7 +16,8 @@ function text(str: string): ToolResult {
 
 export function useCatalogTools() {
   const navigate = useNavigate();
-  const { datasets, pipelines, pipelineRuns, costs } = useCatalogData();
+  const location = useLocation();
+  const { initialized, datasets, dataSources, lineage, pipelines, pipelineRuns, qualityChecks, costs } = useCatalogData();
   const startMockPipelineRun = useCatalogStore((s) => s.startMockPipelineRun);
 
   const executeTool = async (
@@ -23,6 +25,46 @@ export function useCatalogTools() {
     args: Record<string, unknown>,
   ): Promise<ToolResult> => {
     switch (name) {
+      // ----------------------------------------------------------------
+      case 'get_portal_snapshot': {
+        const route = `${location.pathname}${location.search}`;
+        return text(webmcpResponse('portal_snapshot', {
+          portal: {
+            name: 'Happy Coffee Data Developer Portal',
+            dataMode: 'generated-demo-data',
+            executionMode: 'browser-local DuckDB for Develop',
+            initialized: Boolean(initialized),
+          },
+          counts: {
+            datasets: datasets.length,
+            dataSources: dataSources.length,
+            pipelines: pipelines.length,
+            pipelineRuns: pipelineRuns.length,
+            qualityChecks: qualityChecks.length,
+            lineageNodes: lineage.length,
+            costEntries: costs.length,
+          },
+          routes: [
+            { path: '/', purpose: 'Home dashboard and recent catalog activity' },
+            { path: '/datasets', purpose: 'Dataset catalog and metadata' },
+            { path: '/sources', purpose: 'Source health and connected datasets' },
+            { path: '/quality', purpose: 'Quality-check history and failures' },
+            { path: '/lineage', purpose: 'Cross-catalog lineage graph' },
+            { path: '/pipelines', purpose: 'Pipelines, runs, and logs' },
+            { path: '/costs', purpose: 'Infrastructure cost analysis' },
+            { path: '/develop', purpose: 'DuckDB notebook and user-confirmed table publishing' },
+          ],
+          safeguards: {
+            publishing: 'Agents may stage a publication but only a user click can publish it.',
+            pipelineExecution: 'Pipeline execution is mocked and browser-local to this demo.',
+            expiry: 'Develop workspace tables and published demo bundles expire with the local session.',
+          },
+        }, {
+          navigation: { route },
+          nextActions: ['list_data_sources', 'filter_datasets', 'list_quality_checks', 'filter_pipelines', 'analyze_infrastructure_costs', 'inspect_development_workspace'],
+        }));
+      }
+
       // ----------------------------------------------------------------
       case 'open_development_workspace': {
         navigate('/develop');

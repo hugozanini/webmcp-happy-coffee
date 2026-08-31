@@ -26,9 +26,13 @@ describe('WebMCPIntegration', () => {
         (useNavigate as any).mockReturnValue(mockNavigate);
 
         (useCatalogData as any).mockReturnValue({
+            initialized: true,
             datasets: [{ id: 'ds-1', name: 'mock_dataset', displayName: 'Mock Dataset', type: 'dbt', owner: 'Test', schema: { fields: [] }, sampleData: [], qualityScore: 90 }],
+            dataSources: [{ id: 'source-1' }],
+            lineage: [{ id: 'lineage-1' }],
             pipelines: [{ id: 'p-1', name: 'mock_pipeline', displayName: 'Mock Pipeline', inputDatasets: [], outputDatasets: ['ds-1'] }],
             pipelineRuns: [{ pipelineId: 'p-1', id: 'run-1', logs: [{ message: 'Test Log' }] }],
+            qualityChecks: [{ id: 'check-1' }],
             costs: [{ id: 'c-1', category: 'Compute', subcategory: 'Snowflake Warehouse Credits', entityType: 'Pipeline', entityId: 'p-1', amount: 150.50, currency: 'USD', date: new Date().toISOString(), description: 'Compute cost' }],
         });
 
@@ -57,14 +61,14 @@ describe('WebMCPIntegration', () => {
         consoleSpy.mockRestore();
     });
 
-  it('registers 24 tools when mounted', () => {
+  it('registers 25 tools when mounted', () => {
         render(
             <MemoryRouter>
                 <WebMCPIntegration />
             </MemoryRouter>
         );
 
-        expect(modelContextMock.registerTool).toHaveBeenCalledTimes(24);
+        expect(modelContextMock.registerTool).toHaveBeenCalledTimes(25);
         expect(modelContextMock.registerTool.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
         const triggerTool = modelContextMock.registerTool.mock.calls
             .map(([tool]: [any]) => tool)
@@ -87,6 +91,22 @@ describe('WebMCPIntegration', () => {
             const tools = modelContextMock.registerTool.mock.calls.map(([tool]: [any]) => tool);
             return tools.find((tool: any) => tool.name === name);
         };
+
+        it('returns a versioned portal snapshot without requiring UI inspection', async () => {
+            const tool = getTool('get_portal_snapshot');
+
+            const result = JSON.parse(await tool.execute({}));
+
+            expect(result).toMatchObject({
+                schemaVersion: '1.0', kind: 'portal_snapshot', ok: true,
+                data: { counts: { datasets: 1, dataSources: 1, qualityChecks: 1 } },
+            });
+            expect(result.data.routes).toEqual(expect.arrayContaining([
+                expect.objectContaining({ path: '/develop' }),
+                expect.objectContaining({ path: '/sources' }),
+            ]));
+            expect(result.nextActions).toContain('inspect_development_workspace');
+        });
 
         it('view_home_dashboard navigates correctly', async () => {
             const tool = getTool('view_home_dashboard');
