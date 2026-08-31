@@ -49,7 +49,6 @@ export function useCatalogTools() {
             { path: '/datasets', purpose: 'Dataset catalog and metadata' },
             { path: '/sources', purpose: 'Source health and connected datasets' },
             { path: '/quality', purpose: 'Quality-check history and failures' },
-            { path: '/lineage', purpose: 'Cross-catalog lineage graph' },
             { path: '/pipelines', purpose: 'Pipelines, runs, and logs' },
             { path: '/costs', purpose: 'Infrastructure cost analysis' },
             { path: '/develop', purpose: 'DuckDB notebook and user-confirmed table publishing' },
@@ -113,8 +112,8 @@ export function useCatalogTools() {
         const nodes = lineage.filter((node) => node.datasetIds.includes(datasetId)).map((node) => ({ ...node, datasets: node.datasetIds.map((id) => ({ id, name: datasets.find((item) => item.id === id)?.displayName ?? id })) }));
         const nodeIds = new Set(nodes.map((node) => node.id));
         const edges = nodes.filter((node) => node.parentId && nodeIds.has(node.parentId)).map((node) => ({ source: node.parentId!, target: node.id }));
-        navigate(`/lineage?dataset=${encodeURIComponent(datasetId)}`);
-        return text(webmcpResponse('dataset_lineage', { found: Boolean(dataset), dataset: dataset ? { id: dataset.id, name: dataset.displayName } : null, nodes, edges }, { navigation: { route: '/lineage', selectedId: datasetId }, nextActions: ['view_dataset_details', 'view_pipeline_details'] }));
+        navigate(`/datasets/${datasetId}?tab=lineage`);
+        return text(webmcpResponse('dataset_lineage', { found: Boolean(dataset), dataset: dataset ? { id: dataset.id, name: dataset.displayName } : null, nodes, edges }, { navigation: { route: `/datasets/${datasetId}`, selectedId: datasetId, tab: 'lineage' }, nextActions: ['view_dataset_details', 'view_pipeline_details'] }));
       }
 
       case 'preview_dataset_data': {
