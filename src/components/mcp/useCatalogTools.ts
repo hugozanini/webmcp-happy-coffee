@@ -382,7 +382,13 @@ export function useCatalogTools() {
       case 'view_home_dashboard': {
         const tab = (args['tab'] as string | undefined) ?? 'all';
         navigate(`/?tab=${tab}`);
-        return text(`Navigated to Home Dashboard with tab=${tab}`);
+        return text(`Navigated to Home Dashboard with tab=${tab}. Dashboard context: ${JSON.stringify({
+          datasets: datasets.length,
+          dataSources: dataSources.length,
+          pipelines: pipelines.length,
+          connectedSources: dataSources.filter((source) => source.connectionStatus === 'Connected').length,
+          recentQualityChecks: [...qualityChecks].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 8).map((check) => ({ id: check.id, datasetId: check.datasetId, result: check.result, severity: check.severity, message: check.message })),
+        })}`);
       }
 
       // ----------------------------------------------------------------
@@ -418,8 +424,7 @@ export function useCatalogTools() {
           `Pipelines: ${JSON.stringify(matchingPipelines)}`;
         if (isEmpty) {
           msg +=
-            '\n\nNo records found. You MUST autonomously retry this tool up to 2 times ' +
-            'with semantic variations of your query.';
+            '\n\nNo records found. Try a shorter name, a source system, or a related pipeline term.';
         }
         return text(msg);
       }
@@ -449,7 +454,10 @@ export function useCatalogTools() {
           a.types.forEach((t) => params.append('type', t));
           filtered = filtered.filter((d) => a.types!.includes(d.type));
         }
-        if (a.tags) a.tags.forEach((t) => params.append('tag', t));
+        if (a.tags?.length) {
+          a.tags.forEach((t) => params.append('tag', t));
+          filtered = filtered.filter((dataset) => a.tags!.some((tag) => dataset.tags.includes(tag)));
+        }
         if (a.sortKey) params.set('sort', a.sortKey);
         if (a.page) params.set('page', String(a.page));
         navigate(`/datasets?${params.toString()}`);
@@ -465,9 +473,7 @@ export function useCatalogTools() {
           `Found ${summary.length} datasets. Results (up to 5): ${JSON.stringify(summary.slice(0, 5))}`;
         if (summary.length === 0) {
           msg +=
-            '\n\nNo records found. You MUST autonomously retry this tool up to 2 times ' +
-            'with semantic variations of your query. If still not found, try filter_pipelines ' +
-            'or search_global_catalog.';
+            '\n\nNo records found. Try a different dataset type or use search_global_catalog to include sources and pipelines.';
         }
         return text(msg);
       }
@@ -563,6 +569,13 @@ export function useCatalogTools() {
             null,
             2,
           );
+        } else if (tab === 'lineage') {
+          const nodes = lineage.filter((node) => node.datasetIds.includes(d.id)).map((node) => ({
+            id: node.id, name: node.name, type: node.type, location: node.location, parentId: node.parentId ?? null,
+            datasets: node.datasetIds.map((datasetId) => ({ id: datasetId, name: datasets.find((dataset) => dataset.id === datasetId)?.displayName ?? datasetId })),
+          }));
+          const nodeIds = new Set(nodes.map((node) => node.id));
+          info = JSON.stringify({ nodes, edges: nodes.filter((node) => node.parentId && nodeIds.has(node.parentId)).map((node) => ({ source: node.parentId, target: node.id })) }, null, 2);
         }
 
         let msg = `Navigated to Dataset ${id} tab=${tab}.\nPage Content Context:\n${info}`;
@@ -622,9 +635,7 @@ export function useCatalogTools() {
           `Found ${summary.length} pipelines. Results (up to 5): ${JSON.stringify(summary.slice(0, 5))}`;
         if (summary.length === 0) {
           msg +=
-            '\n\nNo records found. You MUST autonomously retry this tool up to 2 times ' +
-            'with semantic variations of your query. If searching for dataset executions, ' +
-            'use filter_datasets or search_global_catalog instead.';
+            '\n\nNo records found. Try a different status, type, engine, or a related dataset search.';
         }
         return text(msg);
       }
@@ -684,7 +695,10 @@ export function useCatalogTools() {
           );
         } else if (tab === 'lineage') {
           info = JSON.stringify(
-            { inputDatasets: p.inputDatasets, outputDatasets: p.outputDatasets },
+            {
+              inputDatasets: datasets.filter((dataset) => p.inputDatasets.includes(dataset.id)).map((dataset) => ({ id: dataset.id, name: dataset.displayName, type: dataset.type })),
+              outputDatasets: datasets.filter((dataset) => p.outputDatasets.includes(dataset.id)).map((dataset) => ({ id: dataset.id, name: dataset.displayName, type: dataset.type })),
+            },
             null,
             2,
           );
@@ -828,7 +842,7 @@ export function useCatalogTools() {
           `Cost Data Context:\n${JSON.stringify(summary, null, 2)}`;
         if (filtered.length === 0) {
           msg +=
-            '\n\nNo records found. Retry with semantic variations or different filters. ' +
+            '\n\nNo records found. Try different filters. ' +
             'Valid categories: Storage, Compute, Query, Transfer, Licensing, Infrastructure.';
         }
         return text(msg);
