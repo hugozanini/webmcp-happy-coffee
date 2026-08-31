@@ -128,6 +128,7 @@ async function renderWorkspace({ withTools = false } = {}) {
 describe('DevelopmentWorkspace WebMCP bridge', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.sessionStorage.clear();
     mocks.run.mockImplementation(async () => okResult());
     mocks.listTables.mockImplementation(async () => WORKSPACE_TABLES);
     mocks.prepare.mockImplementation(async () => ({ expiresAt: EXPIRES_AT }));
@@ -551,6 +552,17 @@ describe('DevelopmentWorkspace WebMCP bridge', () => {
       expect(state.bottomPanelOpen).toBe(true);
       expect(state.bottomPanelHeight).toBe(240);
       expect(await screen.findByRole('button', { name: 'Close output panel' })).toBeInTheDocument();
+    });
+
+    it('preserves a custom output-panel height when Table Publishing opens', async () => {
+      await renderWorkspace();
+
+      await send({ type: 'set-view', bottomPanelHeight: 360 });
+      await send({ type: 'set-view', bottomTab: 'publishing' });
+
+      expect((await inspect()).bottomPanelHeight).toBe(360);
+      expect(screen.getByRole('region', { name: 'Workspace output panel' })).toHaveStyle({ height: '360px' });
+      expect(await screen.findByText('Publish a table')).toBeInTheDocument();
     });
 
     it('collapses and expands the table explorer', async () => {
