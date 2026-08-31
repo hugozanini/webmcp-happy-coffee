@@ -1,7 +1,7 @@
 import { generateDatasets } from './datasets';
 import { generateDataSources } from './data-sources';
 import { generatePipelines, generatePipelineRuns } from './pipeline-runs';
-import { generateLineage } from './lineage';
+import { generateLineageWithSources } from './lineage';
 import { generateQualityChecks } from './quality-checks';
 import { generateCosts } from './costs';
 import type { CatalogData } from '../types';
@@ -25,14 +25,14 @@ function ensureAllDatasetsHavePipelines(
 
 export function generateCatalogData(): CatalogData {
   const datasets = generateDatasets(50);
-  const dataSources = generateDataSources(20);
+  const dataSources = generateDataSources(20, datasets);
   const datasetIds = datasets.map(d => d.id);
   const pipelines = generatePipelines(datasetIds);
 
   ensureAllDatasetsHavePipelines(datasetIds, pipelines);
 
   const pipelineRuns = generatePipelineRuns(pipelines);
-  const lineage = generateLineage(datasetIds);
+  const lineage = generateLineageWithSources(datasetIds, new Map(datasets.map((dataset) => [dataset.id, dataset.source])));
   const qualityChecks = generateQualityChecks(100, datasets);
   const costs = generateCosts(80, datasets, pipelines, dataSources);
 

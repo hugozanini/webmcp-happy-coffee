@@ -16,8 +16,57 @@ const BI_NAMES = ['Looker Dashboard', 'Power BI Report', 'Metabase Dashboard', '
 const UNIQUE_CHAINS = 15;
 
 export function generateLineage(datasetIds: string[]): LineageNode[] {
+  return generateLineageWithSources(datasetIds);
+}
+
+export function generateLineageWithSources(
+  datasetIds: string[],
+  sourceByDatasetId: Map<string, string> = new Map(),
+): LineageNode[] {
   const nodes: LineageNode[] = [];
   const chainNodeIds: string[][] = [];
+
+  // Retain the compact, generic fixture when no source relationship is supplied.
+  // The full catalog passes the map below, grouping datasets only with others
+  // from the same source so a returned lineage never contradicts its metadata.
+  if (sourceByDatasetId.size > 0) {
+    const chainsBySource = new Map<string, string[]>();
+    for (const datasetId of datasetIds) {
+      const source = sourceByDatasetId.get(datasetId) ?? 'Unknown source';
+      const chainIds = chainsBySource.get(source) ?? [];
+      if (!chainsBySource.has(source)) chainsBySource.set(source, chainIds);
+      chainIds.push(datasetId);
+    }
+
+    for (const [source, ids] of chainsBySource) {
+      let parentId: string | undefined;
+      const baseDate = faker.date.recent({ days: 90 });
+      for (let step = 0; step < LINEAGE_CHAIN.length; step++) {
+        const stage = LINEAGE_CHAIN[step];
+        const nodeId = faker.string.uuid();
+        let name = stage.nameTemplate;
+        if (stage.type === 'Source') name = source;
+        if (stage.type === 'BI') name = faker.helpers.arrayElement(BI_NAMES);
+        nodes.push({
+          id: nodeId,
+          type: stage.type,
+          name,
+          timestamp: new Date(baseDate.getTime() + step * 7 * 24 * 60 * 60 * 1000),
+          location: stage.location,
+          datasetIds: ids,
+          metadata: {
+            tier: stage.type,
+            ...(stage.type === 'Bronze' && { format: 'Parquet', partitioned: true }),
+            ...(stage.type === 'Silver' && { materialized: 'incremental', tests: faker.number.int({ min: 2, max: 8 }) }),
+            ...(stage.type === 'Gold' && { materialized: 'table', grain: 'daily' }),
+          },
+          parentId,
+        });
+        parentId = nodeId;
+      }
+    }
+    return nodes;
+  }
 
   const primaryDatasets = datasetIds.slice(0, Math.min(UNIQUE_CHAINS, datasetIds.length));
 

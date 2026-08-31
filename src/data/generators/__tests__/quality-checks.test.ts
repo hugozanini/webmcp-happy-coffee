@@ -41,6 +41,14 @@ describe('generateQualityChecks', () => {
     }
   });
 
+  it('gives every dataset a passing and non-passing example when the count permits it', () => {
+    for (const dataset of datasets) {
+      const datasetChecks = checks.filter((check) => check.datasetId === dataset.id);
+      expect(datasetChecks.some((check) => check.result === 'Passed')).toBe(true);
+      expect(datasetChecks.some((check) => check.result === 'Warning' || check.result === 'Failed')).toBe(true);
+    }
+  });
+
   it('entries are sorted by timestamp descending', () => {
     for (let i = 1; i < checks.length; i++) {
       expect(new Date(checks[i - 1].timestamp).getTime())

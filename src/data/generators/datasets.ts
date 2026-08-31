@@ -240,7 +240,28 @@ const SCHEMAS = ['raw', 'bronze', 'silver', 'gold', 'reporting'];
 const DATABASES = ['analytics_warehouse', 'operational_db', 'data_lake'];
 const OWNERS = ['Data Engineering', 'Analytics', 'BI Team', 'Data Science', 'Platform Team'];
 const TAGS = ['production', 'staging', 'pii', 'sla-critical', 'certified', 'deprecated', 'experimental', 'core'];
-const SOURCES = ['SAP ERP', 'PostgreSQL', 'Salesforce', 'IoT Hub', 'Shipping API', 'Weather API', 'Manual Upload', 'Kafka Stream'];
+// These are display names from data-sources.ts, not connector/system names. Keeping
+// the catalog relationship on a single canonical name lets data-source details,
+// lineage, and datasets tell the same story.
+const SOURCES = ['SAP ERP', 'Farm PostgreSQL', 'Salesforce CRM', 'IoT Warehouse Sensors', 'Shipping Carrier API', 'Weather Service', 'Quality Lab LIMS', 'ICE Market Feed', 'HR System', 'Warehouse WMS', 'Certification Bodies', 'Port Authority Feed', 'Customer Portal', 'Excel Uploads', 'Google Analytics', 'Payment Gateway', 'IoT Farm Stations', 'Email Marketing', 'Logistics TMS', 'Document Storage'];
+const SOURCE_BY_TEMPLATE: Record<string, string> = {
+  coffee_inventory: 'Warehouse WMS',
+  farm_origins: 'Farm PostgreSQL',
+  shipment_tracking: 'Shipping Carrier API',
+  quality_scores: 'Quality Lab LIMS',
+  customer_orders: 'Salesforce CRM',
+  cupping_results: 'Quality Lab LIMS',
+  warehouse_stock: 'Warehouse WMS',
+  export_documents: 'Document Storage',
+  pricing_history: 'ICE Market Feed',
+  financial_transactions: 'SAP ERP',
+  logistics_routes: 'Logistics TMS',
+  employee_directory: 'HR System',
+  certification_registry: 'Certification Bodies',
+  customer_feedback: 'Customer Portal',
+  iot_sensor_readings: 'IoT Warehouse Sensors',
+  harvest_schedule: 'Farm PostgreSQL',
+};
 const FREQUENCIES = ['Real-time', 'Hourly', 'Daily', 'Weekly', 'Monthly'];
 
 function generateSampleRows(columns: { name: string; type: string; description: string; gen: () => unknown }[]): Record<string, unknown>[] {
@@ -300,9 +321,13 @@ export function generateDatasets(count: number): Dataset[] {
   for (let i = 0; i < count; i++) {
     const template = DATASET_TEMPLATES[i % DATASET_TEMPLATES.length];
     const suffix = i >= DATASET_TEMPLATES.length ? `_v${Math.floor(i / DATASET_TEMPLATES.length) + 1}` : '';
-    const schema = faker.helpers.arrayElement(SCHEMAS);
+    const isPrimaryInventory = template.name === 'coffee_inventory' && !suffix;
+    const schema = isPrimaryInventory ? 'bronze' : faker.helpers.arrayElement(SCHEMAS);
+    const tags = faker.helpers.arrayElements(TAGS, { min: 1, max: 3 });
+    if (template.name === 'coffee_inventory' && !tags.includes('inventory')) tags.push('inventory');
 
     const qd = qualityTemplates[i % QUALITY_TEMPLATES];
+    const qualityDashboard = isPrimaryInventory ? { ...qd, healthScore: 95 } : qd;
 
     datasets.push({
       id: faker.string.uuid(),
@@ -315,7 +340,7 @@ export function generateDatasets(count: number): Dataset[] {
         { value: 'External Table' as const, weight: 0.08 },
       ]),
       schema: {
-        database: faker.helpers.arrayElement(DATABASES),
+        database: isPrimaryInventory ? 'data_lake' : faker.helpers.arrayElement(DATABASES),
         schema,
       },
       description: template.desc,
@@ -323,9 +348,9 @@ export function generateDatasets(count: number): Dataset[] {
       rows: faker.number.int({ min: 100, max: 50_000_000 }),
       sizeBytes: faker.number.int({ min: 1024, max: 500_000_000_000 }),
       owner: faker.helpers.arrayElement(OWNERS),
-      tags: faker.helpers.arrayElements(TAGS, { min: 1, max: 3 }),
-      qualityScore: qd.healthScore,
-      criticality: faker.helpers.weightedArrayElement([
+      tags,
+      qualityScore: qualityDashboard.healthScore,
+      criticality: isPrimaryInventory ? 'Critical' : faker.helpers.weightedArrayElement([
         { value: 'Critical' as const, weight: 0.1 },
         { value: 'High' as const, weight: 0.25 },
         { value: 'Medium' as const, weight: 0.4 },
@@ -333,13 +358,13 @@ export function generateDatasets(count: number): Dataset[] {
       ]),
       freshness: {
         lastUpdated: faker.date.recent({ days: 2 }),
-        updateFrequency: faker.helpers.arrayElement(FREQUENCIES),
+        updateFrequency: isPrimaryInventory ? 'Real-time' : faker.helpers.arrayElement(FREQUENCIES),
       },
-      source: faker.helpers.arrayElement(SOURCES),
+      source: SOURCE_BY_TEMPLATE[template.name] ?? SOURCES[i % SOURCES.length],
       createdAt: faker.date.past({ years: 2 }),
       sampleData: generateSampleRows(template.sampleColumns),
       fields: template.sampleColumns.map(c => ({ name: c.name, type: c.type, description: c.description })),
-      qualityDashboard: qd,
+      qualityDashboard,
     });
   }
 

@@ -49,6 +49,40 @@ describe('generateCatalogData', () => {
     }
   });
 
+  it('keeps source metadata and source-linked dataset counts consistent', () => {
+    const sourceNames = new Set(data.dataSources.map((source) => source.name));
+    for (const dataset of data.datasets) {
+      expect(sourceNames.has(dataset.source)).toBe(true);
+    }
+    for (const source of data.dataSources) {
+      expect(source.datasetsCount).toBe(data.datasets.filter((dataset) => dataset.source === source.name).length);
+    }
+  });
+
+  it('keeps every lineage source node consistent with its datasets', () => {
+    const sourceByDatasetId = new Map(data.datasets.map((dataset) => [dataset.id, dataset.source]));
+    for (const node of data.lineage.filter((item) => item.type === 'Source')) {
+      for (const datasetId of node.datasetIds) {
+        expect(node.name).toBe(sourceByDatasetId.get(datasetId));
+      }
+    }
+  });
+
+  it('gives each dataset a passing and a non-passing quality-check example', () => {
+    for (const dataset of data.datasets) {
+      const checks = data.qualityChecks.filter((check) => check.datasetId === dataset.id);
+      expect(checks.some((check) => check.result === 'Passed')).toBe(true);
+      expect(checks.some((check) => check.result === 'Warning' || check.result === 'Failed')).toBe(true);
+    }
+  });
+
+  it('links the inventory transformation pipeline to Coffee Inventory', () => {
+    const coffeeInventory = data.datasets.find((dataset) => dataset.name === 'coffee_inventory');
+    const inventoryPipeline = data.pipelines.find((pipeline) => pipeline.name === 'transform_inventory_silver');
+    expect(coffeeInventory).toBeDefined();
+    expect(inventoryPipeline?.inputDatasets).toContain(coffeeInventory?.id);
+  });
+
   it('every dataset has lineage data', () => {
     const coveredByLineage = new Set<string>();
     for (const node of data.lineage) {

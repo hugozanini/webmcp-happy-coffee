@@ -71,7 +71,7 @@ export function useCatalogTools() {
         const sources = dataSources.filter((source) =>
           (!q || [source.name, source.system, source.owner, source.type].some((value) => value.toLowerCase().includes(q))) &&
           (!statuses?.length || statuses.includes(source.connectionStatus)),
-        ).map((source) => ({ ...source, linkedDatasetIds: datasets.filter((dataset) => dataset.source === source.system).map((dataset) => dataset.id) }));
+        ).map((source) => ({ ...source, linkedDatasetIds: datasets.filter((dataset) => dataset.source === source.name).map((dataset) => dataset.id) }));
         navigate(`/sources?${new URLSearchParams({ ...(query ? { q: query } : {}) }).toString()}`);
         return text(webmcpResponse('data_source_list', { total: sources.length, sources }, { navigation: { route: '/sources' }, nextActions: ['inspect_data_source', 'filter_datasets'] }));
       }
@@ -80,7 +80,7 @@ export function useCatalogTools() {
         const id = args['id'] as string;
         const source = dataSources.find((item) => item.id === id);
         if (!source) return text(webmcpResponse('data_source_detail', { id, found: false }, { navigation: { route: '/sources', selectedId: id } }));
-        const linkedDatasets = datasets.filter((dataset) => dataset.source === source.system).map((dataset) => ({ id: dataset.id, name: dataset.displayName, type: dataset.type, qualityScore: dataset.qualityScore }));
+        const linkedDatasets = datasets.filter((dataset) => dataset.source === source.name).map((dataset) => ({ id: dataset.id, name: dataset.displayName, type: dataset.type, qualityScore: dataset.qualityScore }));
         navigate(`/sources?source=${encodeURIComponent(id)}`);
         return text(webmcpResponse('data_source_detail', { source, linkedDatasets }, { navigation: { route: '/sources', selectedId: id }, nextActions: ['view_dataset_details', 'get_dataset_lineage'] }));
       }

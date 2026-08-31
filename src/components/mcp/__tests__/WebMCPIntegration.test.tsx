@@ -27,7 +27,7 @@ describe('WebMCPIntegration', () => {
 
         (useCatalogData as any).mockReturnValue({
             initialized: true,
-            datasets: [{ id: 'ds-1', name: 'mock_dataset', displayName: 'Mock Dataset', type: 'Table', owner: 'Test', source: 'MockDB', schema: { database: 'demo', schema: 'public' }, fields: [{ name: 'amount' }], sampleData: [{ amount: 42 }], qualityScore: 90 }],
+            datasets: [{ id: 'ds-1', name: 'mock_dataset', displayName: 'Mock Dataset', type: 'Table', owner: 'Test', source: 'Mock source', schema: { database: 'demo', schema: 'public' }, fields: [{ name: 'amount' }], sampleData: [{ amount: 42 }], qualityScore: 90 }],
             dataSources: [{ id: 'source-1', name: 'Mock source', system: 'MockDB', owner: 'Test', type: 'Database', connectionStatus: 'Connected' }],
             lineage: [{ id: 'lineage-1', name: 'Bronze mock', type: 'Bronze', datasetIds: ['ds-1'], location: 'demo.public', metadata: {} }],
             pipelines: [{ id: 'p-1', name: 'mock_pipeline', displayName: 'Mock Pipeline', inputDatasets: [], outputDatasets: ['ds-1'] }],

@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { DataSource } from '../types';
+import type { DataSource, Dataset } from '../types';
 
 const SOURCE_TEMPLATES: { name: string; type: DataSource['type']; system: string; desc: string }[] = [
   { name: 'SAP ERP', type: 'Database', system: 'SAP S/4HANA', desc: 'Enterprise resource planning system for financials and procurement' },
@@ -26,7 +26,7 @@ const SOURCE_TEMPLATES: { name: string; type: DataSource['type']; system: string
 
 const OWNERS = ['Data Engineering', 'Platform Team', 'IT Operations', 'Analytics'];
 
-export function generateDataSources(count: number): DataSource[] {
+export function generateDataSources(count: number, datasets: Dataset[] = []): DataSource[] {
   const sources: DataSource[] = [];
 
   for (let i = 0; i < count; i++) {
@@ -42,7 +42,9 @@ export function generateDataSources(count: number): DataSource[] {
         { value: 'Degraded' as const, weight: 0.12 },
         { value: 'Disconnected' as const, weight: 0.08 },
       ]),
-      datasetsCount: faker.number.int({ min: 1, max: 12 }),
+      datasetsCount: datasets.length
+        ? datasets.filter((dataset) => dataset.source === template.name).length
+        : faker.number.int({ min: 1, max: 12 }),
       lastSync: faker.date.recent({ days: 7 }),
       owner: faker.helpers.arrayElement(OWNERS),
       description: template.desc,
