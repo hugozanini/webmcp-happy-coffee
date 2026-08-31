@@ -69,6 +69,8 @@ type InspectState = {
   activeNotebookId: string;
   activeCellId: string;
   bottomTab: string;
+  bottomPanelOpen: boolean;
+  bottomPanelSize: 'compact' | 'default' | 'expanded';
   notebooks: {
     id: string;
     name: string;
@@ -141,6 +143,8 @@ describe('DevelopmentWorkspace WebMCP bridge', () => {
 
       expect(state.status).toBe('ready');
       expect(state.bottomTab).toBe('results');
+      expect(state.bottomPanelOpen).toBe(true);
+      expect(state.bottomPanelSize).toBe('default');
       expect(state.notebooks).toHaveLength(1);
       expect(state.notebooks[0].name).toBe('Inventory analysis');
       expect(state.notebooks[0].cells[0]).toMatchObject({ index: 1, kind: 'query' });
@@ -530,6 +534,23 @@ describe('DevelopmentWorkspace WebMCP bridge', () => {
 
       await send({ type: 'set-view', bottomTab: 'results' });
       expect((await inspect()).bottomTab).toBe('results');
+    });
+
+    it('opens, closes, and resizes the output panel', async () => {
+      await renderWorkspace();
+
+      await send({ type: 'set-view', bottomPanelSize: 'expanded' });
+      expect((await inspect()).bottomPanelSize).toBe('expanded');
+
+      await send({ type: 'set-view', bottomPanelOpen: false });
+      expect((await inspect()).bottomPanelOpen).toBe(false);
+      expect(await screen.findByRole('button', { name: 'Open output panel' })).toBeInTheDocument();
+
+      await send({ type: 'set-view', bottomPanelOpen: true, bottomPanelSize: 'compact' });
+      const state = await inspect();
+      expect(state.bottomPanelOpen).toBe(true);
+      expect(state.bottomPanelSize).toBe('compact');
+      expect(await screen.findByRole('button', { name: 'Close output panel' })).toBeInTheDocument();
     });
 
     it('collapses and expands the table explorer', async () => {

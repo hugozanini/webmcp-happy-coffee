@@ -43,7 +43,13 @@ export type DevelopmentBridgeAction =
     qualityCellIds?: string[];
     fieldDescriptions?: Record<string, string>;
   }
-  | { type: 'set-view'; bottomTab?: 'results' | 'publishing'; explorerCollapsed?: boolean };
+  | {
+    type: 'set-view';
+    bottomTab?: 'results' | 'publishing';
+    explorerCollapsed?: boolean;
+    bottomPanelOpen?: boolean;
+    bottomPanelSize?: 'compact' | 'default' | 'expanded';
+  };
 
 export type DevelopmentBridgeResult = { ok: boolean; message: string; data?: unknown };
 type Request = { action: DevelopmentBridgeAction; resolve: (result: DevelopmentBridgeResult) => void };
