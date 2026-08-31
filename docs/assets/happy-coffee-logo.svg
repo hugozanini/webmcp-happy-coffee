@@ -1,0 +1,19 @@
+<svg width="1200" height="360" viewBox="0 0 1200 360" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Happy Coffee Data Developer Portal</title>
+  <desc id="desc">A steaming coffee cup beside the Happy Coffee Data Developer Portal wordmark.</desc>
+  <rect width="1200" height="360" rx="32" fill="#0F0F10"/>
+  <path d="M190 100C158 64 194 42 180 10C203 40 183 69 205 100" stroke="#F7F3EC" stroke-width="12" stroke-linecap="round"/>
+  <path d="M238 96C211 62 244 39 231 12C252 41 234 67 258 96" stroke="#F7F3EC" stroke-width="12" stroke-linecap="round"/>
+  <path d="M95 141H284C284 221 250 267 190 267C130 267 96 221 95 141Z" fill="#F7F3EC"/>
+  <path d="M281 159H309C355 159 356 232 292 232H269" stroke="#F7F3EC" stroke-width="20" stroke-linecap="round"/>
+  <ellipse cx="190" cy="141" rx="95" ry="21" fill="#F7F3EC"/>
+  <ellipse cx="190" cy="141" rx="83" ry="13" fill="#0F0F10"/>
+  <path d="M137 189C151 209 229 209 243 189C236 231 144 231 137 189Z" fill="#0F0F10"/>
+  <path d="M150 193C162 210 218 210 230 193" stroke="#F7F3EC" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="152" cy="174" r="5" fill="#0F0F10"/>
+  <circle cx="228" cy="174" r="5" fill="#0F0F10"/>
+  <rect x="382" y="112" width="9" height="116" rx="4.5" fill="#D7A84A"/>
+  <text x="430" y="157" fill="#F7F3EC" font-family="Arial, Helvetica, sans-serif" font-size="64" font-weight="700" letter-spacing="-1.5">Happy Coffee</text>
+  <text x="430" y="213" fill="#B9B6B0" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="400">Data Developer Portal</text>
+  <text x="430" y="270" fill="#D7A84A" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" letter-spacing="3">WEBMCP · DUCKDB-WASM · CLOUD DATA</text>
+</svg>

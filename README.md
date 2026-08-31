@@ -1,4 +1,12 @@
-# Happy Coffee Data Developer Portal
+<p align="center">
+  <img src="./docs/assets/happy-coffee-logo.svg" alt="Happy Coffee Data Developer Portal" width="760" />
+</p>
+
+<p align="center">
+  <a href="https://webmcp-happy-coffee.pages.dev/"><strong>Explore the live demo</strong></a>
+  &nbsp;·&nbsp;
+  WebMCP-powered data development in the browser
+</p>
 
 A fictional data developer portal that demonstrates how a web application can expose safe, structured capabilities to AI agents through [WebMCP](https://webmachinelearning.github.io/webmcp/).
 
