@@ -4,6 +4,12 @@ A fictional data developer portal that demonstrates how a web application can ex
 
 Happy Coffee uses deterministic, realistic mock data for datasets, pipelines, data-quality checks, lineage, and platform costs. No portal data is real.
 
+## Live demo
+
+Try the deployed portal at [webmcp-happy-coffee.pages.dev](https://webmcp-happy-coffee.pages.dev/).
+
+The site is deployed on Cloudflare Pages from the `main` branch. The portal works in any modern browser; WebMCP tools are available when the visiting AI/browser host supports `document.modelContext`.
+
 ## What it demonstrates
 
 - A React data developer portal with realistic mock assets and operational metrics.
