@@ -86,6 +86,24 @@ export function WebMCPIntegration() {
           execute: (args: Record<string, unknown>) => executeToolRef.current('preview_dataset_data', args),
         },
         {
+          name: 'list_pipeline_runs',
+          description: 'List pipeline runs with stable IDs, bounded pagination, statuses, and mock-environment context.',
+          inputSchema: { type: 'object', properties: { pipelineId: { type: 'string' }, statuses: { type: 'array', items: { type: 'string', enum: ['Success', 'Failed', 'Running', 'Cancelled'] } }, limit: { type: 'number' }, offset: { type: 'number' } } },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('list_pipeline_runs', args),
+        },
+        {
+          name: 'inspect_pipeline_run',
+          description: 'Inspect one pipeline run and its logs without relying on the expanded Runs UI.',
+          inputSchema: { type: 'object', properties: { pipelineId: { type: 'string' }, runId: { type: 'string' } }, required: ['pipelineId', 'runId'] },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('inspect_pipeline_run', args),
+        },
+        {
+          name: 'list_cost_entries',
+          description: 'List bounded, filterable infrastructure cost entries with totals and stable entity IDs.',
+          inputSchema: { type: 'object', properties: { dateRange: { type: 'string', enum: ['7', '15', '30', '60', '90'] }, category: { type: 'string', enum: ['Storage', 'Compute', 'Query', 'Transfer', 'Licensing', 'Infrastructure'] }, entityType: { type: 'string', enum: ['Dataset', 'Pipeline', 'Source'] }, entityId: { type: 'string' }, search: { type: 'string' }, limit: { type: 'number' }, offset: { type: 'number' } } },
+          execute: (args: Record<string, unknown>) => executeToolRef.current('list_cost_entries', args),
+        },
+        {
           name: 'open_development_workspace',
           description:
             'Open the Happy Coffee DuckDB development workspace and list the generated catalog tables available for SQL development. ' +

@@ -61,14 +61,14 @@ describe('WebMCPIntegration', () => {
         consoleSpy.mockRestore();
     });
 
-  it('registers 31 tools when mounted', () => {
+  it('registers 34 tools when mounted', () => {
         render(
             <MemoryRouter>
                 <WebMCPIntegration />
             </MemoryRouter>
         );
 
-        expect(modelContextMock.registerTool).toHaveBeenCalledTimes(31);
+        expect(modelContextMock.registerTool).toHaveBeenCalledTimes(34);
         expect(modelContextMock.registerTool.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
         const triggerTool = modelContextMock.registerTool.mock.calls
             .map(([tool]: [any]) => tool)
@@ -121,6 +121,14 @@ describe('WebMCPIntegration', () => {
 
             const preview = JSON.parse(await getTool('preview_dataset_data').execute({ id: 'ds-1', columns: ['amount'] }));
             expect(preview).toMatchObject({ kind: 'dataset_preview', data: { rows: [{ amount: 42 }] } });
+        });
+
+        it('returns bounded pipeline and cost operations as structured contracts', async () => {
+            const runs = JSON.parse(await getTool('list_pipeline_runs').execute({ pipelineId: 'p-1' }));
+            expect(runs).toMatchObject({ kind: 'pipeline_run_list', data: { total: 1, runs: [{ id: 'run-1' }] } });
+
+            const costs = JSON.parse(await getTool('list_cost_entries').execute({ entityType: 'Pipeline' }));
+            expect(costs).toMatchObject({ kind: 'cost_entry_list', data: { total: 1, totalAmount: 150.5 } });
         });
 
         it('view_home_dashboard navigates correctly', async () => {

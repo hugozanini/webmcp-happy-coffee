@@ -128,6 +128,42 @@ export function useCatalogTools() {
         return text(webmcpResponse('dataset_preview', { dataset: { id: dataset.id, name: dataset.displayName }, columns: selectedColumns, offset, totalSampleRows: dataset.sampleData.length, rows }, { navigation: { route: `/datasets/${id}`, selectedId: id, tab: 'data' }, nextActions: ['view_dataset_details', 'get_dataset_lineage'] }));
       }
 
+      case 'list_pipeline_runs': {
+        const { pipelineId, statuses, limit = 50, offset = 0 } = args as { pipelineId?: string; statuses?: string[]; limit?: number; offset?: number };
+        const matching = pipelineRuns.filter((run) => (!pipelineId || run.pipelineId === pipelineId) && (!statuses?.length || statuses.includes(run.status))).sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+        const page = matching.slice(Math.max(0, offset), Math.max(0, offset) + Math.min(Math.max(1, limit), 100)).map((run) => ({
+          id: run.id, pipelineId: run.pipelineId, pipelineName: run.pipelineName, runNumber: run.runNumber, status: run.status,
+          startTime: run.startTime, endTime: run.endTime, duration: run.duration, recordsProcessed: run.recordsProcessed,
+          recordsFailed: run.recordsFailed, triggerType: run.triggerType, environment: run.parameters?.environment ?? null,
+        }));
+        navigate(pipelineId ? `/pipelines/${pipelineId}?tab=runs` : '/pipelines');
+        return text(webmcpResponse('pipeline_run_list', { total: matching.length, offset, runs: page }, { navigation: { route: pipelineId ? `/pipelines/${pipelineId}` : '/pipelines', selectedId: pipelineId, tab: 'runs' }, nextActions: ['inspect_pipeline_run', 'view_pipeline_details'] }));
+      }
+
+      case 'inspect_pipeline_run': {
+        const { pipelineId, runId } = args as { pipelineId: string; runId: string };
+        const run = pipelineRuns.find((item) => item.pipelineId === pipelineId && item.id === runId);
+        navigate(`/pipelines/${pipelineId}?tab=runs&run=${encodeURIComponent(runId)}`);
+        return text(webmcpResponse('pipeline_run_detail', { found: Boolean(run), run: run ?? null, pipeline: pipelines.find((pipeline) => pipeline.id === pipelineId) ?? null }, { navigation: { route: `/pipelines/${pipelineId}`, selectedId: runId, tab: 'runs' }, notices: ['Pipeline run execution is mocked in this demo.'] }));
+      }
+
+      case 'list_cost_entries': {
+        const { dateRange, category, entityType, entityId, search = '', limit = 50, offset = 0 } = args as { dateRange?: string; category?: string; entityType?: string; entityId?: string; search?: string; limit?: number; offset?: number };
+        const cutoff = dateRange ? Date.now() - Number(dateRange) * 24 * 60 * 60 * 1000 : null;
+        const q = search.toLowerCase();
+        const matching = costs.filter((cost) =>
+          (!cutoff || new Date(cost.date).getTime() >= cutoff) &&
+          (!category || cost.category === category) &&
+          (!entityType || cost.entityType === entityType) &&
+          (!entityId || cost.entityId === entityId) &&
+          (!q || [cost.description, cost.subcategory, cost.category].some((value) => value.toLowerCase().includes(q))),
+        ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const page = matching.slice(Math.max(0, offset), Math.max(0, offset) + Math.min(Math.max(1, limit), 100));
+        const totalAmount = matching.reduce((sum, cost) => sum + cost.amount, 0);
+        navigate(`/costs?${new URLSearchParams({ ...(dateRange ? { range: dateRange } : {}), ...(category ? { category } : {}), ...(entityType ? { entityType } : {}), ...(search ? { q: search } : {}) }).toString()}`);
+        return text(webmcpResponse('cost_entry_list', { total: matching.length, offset, totalAmount, currency: 'USD', entries: page }, { navigation: { route: '/costs' }, nextActions: ['analyze_infrastructure_costs', 'view_dataset_details', 'view_pipeline_details'] }));
+      }
+
       // ----------------------------------------------------------------
       case 'open_development_workspace': {
         navigate('/develop');
@@ -671,11 +707,13 @@ export function useCatalogTools() {
 
         const runId = startMockPipelineRun(pipelineId, environment);
         navigate(`/pipelines/${pipelineId}?tab=runs`);
-        return text(
-          `Triggered pipeline "${pipeline.displayName}" on ${environment}.\n` +
-            `New run ID: ${runId} — status is now Running.\n` +
-            `Wait ~10 seconds, then call view_pipeline_details with tab=runs to confirm completion.`,
-        );
+        return text(webmcpResponse('pipeline_run_started', {
+          pipeline: { id: pipeline.id, name: pipeline.displayName }, runId, environment, status: 'Running',
+        }, {
+          navigation: { route: `/pipelines/${pipelineId}`, selectedId: runId, tab: 'runs' },
+          notices: ['This is a browser-local mocked pipeline execution. It transitions to Success automatically after about 8 seconds.'],
+          nextActions: ['inspect_pipeline_run', 'list_pipeline_runs'],
+        }));
       }
 
       // ----------------------------------------------------------------
