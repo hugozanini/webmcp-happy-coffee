@@ -5,6 +5,8 @@
 <p align="center">
   <a href="https://webmcp-happy-coffee.pages.dev/"><strong>Explore the live demo</strong></a>
   &nbsp;·&nbsp;
+  <a href="https://www.youtube.com/watch?v=qecdWLuWHa0"><strong>Watch the video demo</strong></a>
+  &nbsp;·&nbsp;
   WebMCP-powered data development in the browser
 </p>
 
@@ -15,6 +17,10 @@ Happy Coffee uses deterministic, realistic mock data for datasets, pipelines, da
 ## Live demo
 
 Try the deployed portal at [webmcp-happy-coffee.pages.dev](https://webmcp-happy-coffee.pages.dev/).
+
+Watch the [under-three-minute video walkthrough](https://www.youtube.com/watch?v=qecdWLuWHa0) to see an AI agent use WebMCP to explore the catalog, develop a DuckDB query, run a quality check, and stage a data product for human approval.
+
+[![Watch the Happy Coffee video demo](https://img.youtube.com/vi/qecdWLuWHa0/hqdefault.jpg)](https://www.youtube.com/watch?v=qecdWLuWHa0)
 
 The site is deployed on Cloudflare Pages from the `main` branch. The portal works in any modern browser; WebMCP tools are available when the visiting AI/browser host supports `document.modelContext`.
 
