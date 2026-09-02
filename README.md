@@ -18,7 +18,6 @@ Happy Coffee uses deterministic, realistic mock data for datasets, pipelines, da
 
 Try the deployed portal at [webmcp-happy-coffee.pages.dev](https://webmcp-happy-coffee.pages.dev/).
 
-Watch the [under-three-minute video walkthrough](https://www.youtube.com/watch?v=qecdWLuWHa0) to see an AI agent use WebMCP to explore the catalog, develop a DuckDB query, run a quality check, and stage a data product for human approval.
 
 [![Watch the Happy Coffee video demo](https://img.youtube.com/vi/qecdWLuWHa0/hqdefault.jpg)](https://www.youtube.com/watch?v=qecdWLuWHa0)
 
